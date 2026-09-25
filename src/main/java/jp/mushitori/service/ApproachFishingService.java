@@ -490,6 +490,18 @@ public final class ApproachFishingService {
         double distance = fish.getLocation().distance(hookLocation);
         if (distance < arrivalDistance) return true;
 
+        if (fish instanceof Mob mob && distance < 1.5) {
+            // パスファインダーはブロック単位の経路しか引けず、浮きの手前1ブロック以内では
+            // 「経路なし」になって止まってしまうため、最後の詰めだけは直線で寄せる
+            mob.getPathfinder().stopPathfinding();
+            Location current = fish.getLocation();
+            Vector to = hookLocation.toVector().subtract(current.toVector());
+            Location next = current.clone().add(to.clone().normalize().multiply(Math.min(distance, 0.3)));
+            next.setDirection(to);
+            fish.teleport(next);
+            return false;
+        }
+
         if (fish instanceof Mob mob) {
             double speed = Math.max(0.15, Math.min(1.2, distance / Math.max(1, remainingUpdates) / 0.4));
             boolean pathing = mob.getPathfinder().moveTo(hookLocation, speed);
