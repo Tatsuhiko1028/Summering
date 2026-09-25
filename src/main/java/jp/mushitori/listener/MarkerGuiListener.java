@@ -1,8 +1,10 @@
 package jp.mushitori.listener;
 
 import jp.mushitori.MushitoriPlugin;
+import jp.mushitori.model.ApproachOverrides;
 import jp.mushitori.model.Creature;
 import jp.mushitori.model.CreatureOverride;
+import jp.mushitori.model.Rarity;
 import jp.mushitori.model.SpawnMarker;
 import jp.mushitori.model.SpawnPreset;
 import jp.mushitori.model.WeightedCreature;
@@ -100,7 +102,7 @@ public final class MarkerGuiListener implements Listener {
                     player.sendActionBar(Component.text("先に生物を割り当ててください。", NamedTextColor.RED));
                     return;
                 }
-                CreatureDetailGui.open(player, gui.markerId(), index, current);
+                CreatureDetailGui.open(plugin, player, gui.markerId(), index, current);
                 return;
             }
             if (!shift && !right) {
@@ -146,8 +148,6 @@ public final class MarkerGuiListener implements Listener {
             int removed = plugin.ambientSpawnService().resetMarkerMobs(gui.markerId());
             player.sendActionBar(Component.text(
                     removed + "体をデスポーンさせました。", NamedTextColor.GREEN));
-        } else if (slot == MarkerGui.SLOT_SIZE_TEMPLATE) {
-            gui.setWorking(withSizeDistributionTemplate(w, nextSizeTemplate(w.sizeDistributionTemplate())));
         } else {
             return;
         }
@@ -216,11 +216,14 @@ public final class MarkerGuiListener implements Listener {
         List<WeightedCreature> list = new ArrayList<>(marker.creatures());
         while (list.size() <= index) list.add(null);
         WeightedCreature current = list.get(index);
-        // 既存の枠があれば、ウェイト・タグ上書き・スケール上書きはそのまま引き継ぎ、生物IDだけ差し替える
+        // 既存の枠があれば、ウェイト・各種上書きはそのまま引き継ぎ、生物IDだけ差し替える
         int weight = current == null ? 1 : current.weight();
         var requiredTagsOverride = current == null ? Set.<String>of() : current.requiredTagsOverride();
         var override = current == null ? CreatureOverride.EMPTY : current.override();
-        list.set(index, new WeightedCreature(creatureId, weight, requiredTagsOverride, override));
+        var sizeDistributionTemplate = current == null ? null : current.sizeDistributionTemplate();
+        var approachOverride = current == null ? ApproachOverrides.EMPTY : current.approachOverride();
+        list.set(index, new WeightedCreature(creatureId, weight, requiredTagsOverride, override,
+                sizeDistributionTemplate, approachOverride));
 
         plugin.ambientSpawnService().updateMarker(withCreatures(marker, list));
 
@@ -262,7 +265,8 @@ public final class MarkerGuiListener implements Listener {
         WeightedCreature current = list.get(index);
 
         if (event.getSlot() == CreatureDetailGui.SLOT_CLEAR_ALL) {
-            list.set(index, current.withRequiredTagsOverride(Set.of()).withOverride(CreatureOverride.EMPTY));
+            list.set(index, current.withRequiredTagsOverride(Set.of()).withOverride(CreatureOverride.EMPTY)
+                    .withSizeDistributionTemplate(null).withApproachOverride(ApproachOverrides.EMPTY));
             plugin.ambientSpawnService().updateMarker(withCreatures(marker, list));
             player.sendMessage(Component.text("この枠の上書きを全て解除しました。", NamedTextColor.GREEN));
             WeightedCreature updated = list.get(index);
@@ -270,7 +274,7 @@ public final class MarkerGuiListener implements Listener {
             return;
         }
 
-        // 数値・タグ項目：クリックしてチャット入力を開始する
+        // 数値・タグ・秒数項目：クリックしてチャット入力を開始する
         switch (event.getSlot()) {
             case CreatureDetailGui.SLOT_REQUIRED_TAGS -> startFieldEdit(player, markerId, index, "tags",
                     "必要タグの上書き", "チャットにカンマ区切りで入力してください（例: event,special）。");
@@ -285,6 +289,24 @@ public final class MarkerGuiListener implements Listener {
             case CreatureDetailGui.SLOT_MOVEMENT_SPEED_MULTIPLIER -> startFieldEdit(player, markerId, index,
                     "movement-speed-multiplier", "移動速度倍率上書き（movement-speed-multiplier）",
                     "チャットに数値を入力してください（例: 0.5でゆっくり）。");
+            case CreatureDetailGui.SLOT_APPROACH_PATIENCE -> startFieldEdit(player, markerId, index,
+                    "approach-patience", "アプローチ：反応判定までの待ち時間上書き（patience-seconds）",
+                    "チャットに秒数を入力してください（例: 10）。");
+            case CreatureDetailGui.SLOT_APPROACH_RETRY_INTERVAL -> startFieldEdit(player, markerId, index,
+                    "approach-retry-interval", "アプローチ：再判定間隔上書き（retry-interval-seconds）",
+                    "チャットに秒数を入力してください（例: 3）。");
+            case CreatureDetailGui.SLOT_APPROACH_TRIGGER_CHANCE -> startFieldEdit(player, markerId, index,
+                    "approach-trigger-chance", "アプローチ：反応確率上書き（trigger-chance）",
+                    "チャットに0.0〜1.0の数値を入力してください（例: 0.4）。");
+            case CreatureDetailGui.SLOT_APPROACH_MIN_SECONDS -> startFieldEdit(player, markerId, index,
+                    "approach-min-seconds", "アプローチ：誘導時間（最短）上書き（min-approach-seconds）",
+                    "チャットに秒数を入力してください（例: 2）。");
+            case CreatureDetailGui.SLOT_APPROACH_MAX_SECONDS -> startFieldEdit(player, markerId, index,
+                    "approach-max-seconds", "アプローチ：誘導時間（最長）上書き（max-approach-seconds）",
+                    "チャットに秒数を入力してください（例: 4）。");
+            case CreatureDetailGui.SLOT_APPROACH_WINDOW_SECONDS -> startFieldEdit(player, markerId, index,
+                    "approach-window-seconds", "アプローチ：竿を振るタイミング上書き（window-seconds）",
+                    "チャットに秒数を入力してください（例: 1.5）。");
             case CreatureDetailGui.SLOT_FLYING -> {
                 WeightedCreature updated = current.withOverride(
                         current.override().withFlying(cycleBoolean(current.override().flying())));
@@ -309,6 +331,31 @@ public final class MarkerGuiListener implements Listener {
             case CreatureDetailGui.SLOT_DISABLE_NECTAR -> {
                 WeightedCreature updated = current.withOverride(
                         current.override().withDisableNectar(cycleBoolean(current.override().disableNectar())));
+                list.set(index, updated);
+                plugin.ambientSpawnService().updateMarker(withCreatures(marker, list));
+                detailGui.redraw(updated);
+            }
+            case CreatureDetailGui.SLOT_SIZE_DISTRIBUTION_TEMPLATE -> {
+                String next = nextInCycle(plugin.catchService().sizeDistributionTemplateNames(),
+                        current.sizeDistributionTemplate());
+                WeightedCreature updated = current.withSizeDistributionTemplate(next);
+                list.set(index, updated);
+                plugin.ambientSpawnService().updateMarker(withCreatures(marker, list));
+                detailGui.redraw(updated);
+            }
+            case CreatureDetailGui.SLOT_SIZE_RARITY_TEMPLATE -> {
+                String next = nextInCycle(plugin.catchService().sizeRarityTemplateNames(),
+                        current.override().sizeRarityTemplate());
+                WeightedCreature updated = current.withOverride(current.override().withSizeRarityTemplate(next));
+                list.set(index, updated);
+                plugin.ambientSpawnService().updateMarker(withCreatures(marker, list));
+                detailGui.redraw(updated);
+            }
+            case CreatureDetailGui.SLOT_BASE_RARITY -> {
+                List<String> rarityKeys = plugin.catchService().rarities().all().stream()
+                        .map(Rarity::key).collect(Collectors.toList());
+                String next = nextInCycle(rarityKeys, current.override().baseRarityKey());
+                WeightedCreature updated = current.withOverride(current.override().withBaseRarityKey(next));
                 list.set(index, updated);
                 plugin.ambientSpawnService().updateMarker(withCreatures(marker, list));
                 detailGui.redraw(updated);
@@ -410,11 +457,14 @@ public final class MarkerGuiListener implements Listener {
         }, null);
     }
 
-    /** 現在のテンプレート名から、次のテンプレート（既定を含めて巡回）を求める。 */
+    /**
+     * 現在の値から、次の候補（既定＝nullを含めて巡回）を求める。
+     * {@link CreatureDetailGui}のサイズイベント・size-rarity-template・base-rarity
+     * の各上書きボタンで共通して使う。
+     */
     @Nullable
-    private String nextSizeTemplate(@Nullable String current) {
-        List<String> names = plugin.catchService().sizeDistributionTemplateNames();
-        if (names.isEmpty()) return null; // テンプレートが定義されていなければ常に既定のまま
+    private String nextInCycle(List<String> names, @Nullable String current) {
+        if (names.isEmpty()) return null; // 候補が定義されていなければ常に既定のまま
         List<String> cycle = new ArrayList<>();
         cycle.add(null); // 既定（未選択）も巡回に含める
         cycle.addAll(names);
@@ -467,16 +517,40 @@ public final class MarkerGuiListener implements Listener {
                     return;
                 }
             }
-            CreatureOverride ov = current.override();
-            CreatureOverride newOv = switch (ref.field()) {
-                case "scale" -> ov.withScale(value);
-                case "escape-chance" -> ov.withEscapeChance(value);
-                case "flee-radius" -> ov.withFleeRadius(value);
-                case "flee-speed" -> ov.withFleeSpeed(value);
-                case "movement-speed-multiplier" -> ov.withMovementSpeedMultiplier(value);
-                default -> ov;
-            };
-            list.set(ref.slotIndex(), current.withOverride(newOv));
+            if (ref.field().startsWith("approach-")) {
+                ApproachOverrides ao = current.approachOverride();
+                ApproachOverrides newAo = switch (ref.field()) {
+                    case "approach-patience" -> new ApproachOverrides(value, ao.retryIntervalSeconds(),
+                            ao.triggerChance(), ao.minApproachSeconds(), ao.maxApproachSeconds(), ao.windowSeconds());
+                    case "approach-retry-interval" -> new ApproachOverrides(ao.patienceSeconds(), value,
+                            ao.triggerChance(), ao.minApproachSeconds(), ao.maxApproachSeconds(), ao.windowSeconds());
+                    case "approach-trigger-chance" -> new ApproachOverrides(ao.patienceSeconds(),
+                            ao.retryIntervalSeconds(), value, ao.minApproachSeconds(), ao.maxApproachSeconds(),
+                            ao.windowSeconds());
+                    case "approach-min-seconds" -> new ApproachOverrides(ao.patienceSeconds(),
+                            ao.retryIntervalSeconds(), ao.triggerChance(), value, ao.maxApproachSeconds(),
+                            ao.windowSeconds());
+                    case "approach-max-seconds" -> new ApproachOverrides(ao.patienceSeconds(),
+                            ao.retryIntervalSeconds(), ao.triggerChance(), ao.minApproachSeconds(), value,
+                            ao.windowSeconds());
+                    case "approach-window-seconds" -> new ApproachOverrides(ao.patienceSeconds(),
+                            ao.retryIntervalSeconds(), ao.triggerChance(), ao.minApproachSeconds(),
+                            ao.maxApproachSeconds(), value);
+                    default -> ao;
+                };
+                list.set(ref.slotIndex(), current.withApproachOverride(newAo));
+            } else {
+                CreatureOverride ov = current.override();
+                CreatureOverride newOv = switch (ref.field()) {
+                    case "scale" -> ov.withScale(value);
+                    case "escape-chance" -> ov.withEscapeChance(value);
+                    case "flee-radius" -> ov.withFleeRadius(value);
+                    case "flee-speed" -> ov.withFleeSpeed(value);
+                    case "movement-speed-multiplier" -> ov.withMovementSpeedMultiplier(value);
+                    default -> ov;
+                };
+                list.set(ref.slotIndex(), current.withOverride(newOv));
+            }
         }
 
         plugin.ambientSpawnService().updateMarker(withCreatures(marker, list));
@@ -523,16 +597,18 @@ public final class MarkerGuiListener implements Listener {
         WeightedCreature current = list.get(index);
 
         if (shift && right) {
-            // シフト＋右クリック：ウェイト +1
+            // シフト＋右クリック：ウェイト +1（他の上書きはそのまま維持する）
             if (current != null) {
                 list.set(index, new WeightedCreature(current.creatureId(), current.weight() + 1,
-                        current.requiredTagsOverride(), current.override()));
+                        current.requiredTagsOverride(), current.override(), current.sizeDistributionTemplate(),
+                        current.approachOverride()));
             }
         } else if (right) {
-            // 右クリック：ウェイト -1
+            // 右クリック：ウェイト -1（他の上書きはそのまま維持する）
             if (current != null && current.weight() > 1) {
                 list.set(index, new WeightedCreature(current.creatureId(), current.weight() - 1,
-                        current.requiredTagsOverride(), current.override()));
+                        current.requiredTagsOverride(), current.override(), current.sizeDistributionTemplate(),
+                        current.approachOverride()));
             } else if (current != null) {
                 player.sendActionBar(Component.text("ウェイトは1未満にできません。", NamedTextColor.RED));
             }
@@ -564,73 +640,66 @@ public final class MarkerGuiListener implements Listener {
     private SpawnMarker withCreatures(SpawnMarker w, List<WeightedCreature> creatures) {
         return new SpawnMarker(w.id(), w.name(), w.worldName(), w.x(), w.y(), w.z(), List.copyOf(creatures),
                 w.triggerRadius(), w.despawnRadius(), w.spawnRadius(), w.maxCount(), w.simultaneousMax(),
-                w.spawnIntervalSeconds(), w.spawnChance(), w.catchWindowSeconds(), w.sizeDistributionTemplate());
+                w.spawnIntervalSeconds(), w.spawnChance(), w.catchWindowSeconds());
     }
 
     private SpawnMarker withCreaturesAndMax(SpawnMarker w, List<WeightedCreature> creatures, int maxCount) {
         return new SpawnMarker(w.id(), w.name(), w.worldName(), w.x(), w.y(), w.z(), List.copyOf(creatures),
                 w.triggerRadius(), w.despawnRadius(), w.spawnRadius(), Math.max(1, maxCount), w.simultaneousMax(),
-                w.spawnIntervalSeconds(), w.spawnChance(), w.catchWindowSeconds(), w.sizeDistributionTemplate());
+                w.spawnIntervalSeconds(), w.spawnChance(), w.catchWindowSeconds());
     }
 
     private SpawnMarker withTriggerRadius(SpawnMarker w, double v) {
         return new SpawnMarker(w.id(), w.name(), w.worldName(), w.x(), w.y(), w.z(), w.creatures(),
                 v, w.despawnRadius(), w.spawnRadius(), w.maxCount(), w.simultaneousMax(),
-                w.spawnIntervalSeconds(), w.spawnChance(), w.catchWindowSeconds(), w.sizeDistributionTemplate());
+                w.spawnIntervalSeconds(), w.spawnChance(), w.catchWindowSeconds());
     }
 
     private SpawnMarker withDespawnRadius(SpawnMarker w, double v) {
         return new SpawnMarker(w.id(), w.name(), w.worldName(), w.x(), w.y(), w.z(), w.creatures(),
                 w.triggerRadius(), v, w.spawnRadius(), w.maxCount(), w.simultaneousMax(),
-                w.spawnIntervalSeconds(), w.spawnChance(), w.catchWindowSeconds(), w.sizeDistributionTemplate());
+                w.spawnIntervalSeconds(), w.spawnChance(), w.catchWindowSeconds());
     }
 
     private SpawnMarker withSpawnRadius(SpawnMarker w, double v) {
         return new SpawnMarker(w.id(), w.name(), w.worldName(), w.x(), w.y(), w.z(), w.creatures(),
                 w.triggerRadius(), w.despawnRadius(), v, w.maxCount(), w.simultaneousMax(),
-                w.spawnIntervalSeconds(), w.spawnChance(), w.catchWindowSeconds(), w.sizeDistributionTemplate());
+                w.spawnIntervalSeconds(), w.spawnChance(), w.catchWindowSeconds());
     }
 
     private SpawnMarker withMaxCount(SpawnMarker w, int v) {
         return new SpawnMarker(w.id(), w.name(), w.worldName(), w.x(), w.y(), w.z(), w.creatures(),
                 w.triggerRadius(), w.despawnRadius(), w.spawnRadius(), v, w.simultaneousMax(),
-                w.spawnIntervalSeconds(), w.spawnChance(), w.catchWindowSeconds(), w.sizeDistributionTemplate());
+                w.spawnIntervalSeconds(), w.spawnChance(), w.catchWindowSeconds());
     }
 
     private SpawnMarker withSimultaneousMax(SpawnMarker w, int v) {
         return new SpawnMarker(w.id(), w.name(), w.worldName(), w.x(), w.y(), w.z(), w.creatures(),
                 w.triggerRadius(), w.despawnRadius(), w.spawnRadius(), w.maxCount(), Math.max(1, v),
-                w.spawnIntervalSeconds(), w.spawnChance(), w.catchWindowSeconds(), w.sizeDistributionTemplate());
+                w.spawnIntervalSeconds(), w.spawnChance(), w.catchWindowSeconds());
     }
 
     private SpawnMarker withSpawnInterval(SpawnMarker w, double v) {
         return new SpawnMarker(w.id(), w.name(), w.worldName(), w.x(), w.y(), w.z(), w.creatures(),
                 w.triggerRadius(), w.despawnRadius(), w.spawnRadius(), w.maxCount(), w.simultaneousMax(),
-                v, w.spawnChance(), w.catchWindowSeconds(), w.sizeDistributionTemplate());
+                v, w.spawnChance(), w.catchWindowSeconds());
     }
 
     private SpawnMarker withCatchWindow(SpawnMarker w, double v) {
         return new SpawnMarker(w.id(), w.name(), w.worldName(), w.x(), w.y(), w.z(), w.creatures(),
                 w.triggerRadius(), w.despawnRadius(), w.spawnRadius(), w.maxCount(), w.simultaneousMax(),
-                w.spawnIntervalSeconds(), w.spawnChance(), v, w.sizeDistributionTemplate());
+                w.spawnIntervalSeconds(), w.spawnChance(), v);
     }
 
     private SpawnMarker withSpawnChance(SpawnMarker w, double v) {
         return new SpawnMarker(w.id(), w.name(), w.worldName(), w.x(), w.y(), w.z(), w.creatures(),
                 w.triggerRadius(), w.despawnRadius(), w.spawnRadius(), w.maxCount(), w.simultaneousMax(),
-                w.spawnIntervalSeconds(), Math.max(0.0, Math.min(1.0, v)), w.catchWindowSeconds(),
-                w.sizeDistributionTemplate());
+                w.spawnIntervalSeconds(), Math.max(0.0, Math.min(1.0, v)), w.catchWindowSeconds());
     }
 
     private SpawnMarker withName(SpawnMarker w, String newName) {
         return new SpawnMarker(w.id(), newName, w.worldName(), w.x(), w.y(), w.z(), w.creatures(),
                 w.triggerRadius(), w.despawnRadius(), w.spawnRadius(), w.maxCount(), w.simultaneousMax(),
-                w.spawnIntervalSeconds(), w.spawnChance(), w.catchWindowSeconds(), w.sizeDistributionTemplate());
-    }
-
-    private SpawnMarker withSizeDistributionTemplate(SpawnMarker w, String templateNameOrNull) {
-        return new SpawnMarker(w.id(), w.name(), w.worldName(), w.x(), w.y(), w.z(), w.creatures(),
-                w.triggerRadius(), w.despawnRadius(), w.spawnRadius(), w.maxCount(), w.simultaneousMax(),
-                w.spawnIntervalSeconds(), w.spawnChance(), w.catchWindowSeconds(), templateNameOrNull);
+                w.spawnIntervalSeconds(), w.spawnChance(), w.catchWindowSeconds());
     }
 }

@@ -14,6 +14,7 @@ import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.Bee;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
+import org.bukkit.entity.Fish;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Mob;
 import org.bukkit.entity.Salmon;
@@ -90,6 +91,12 @@ public final class SpawnService {
         Creature effective = creature;
         if (override != null && !override.isEmpty()) {
             if (override.scale() != null) effective = effective.withBaseScale(override.scale());
+            if (override.sizeRarityTemplate() != null) {
+                effective = effective.withSizeRarityTemplate(override.sizeRarityTemplate());
+            }
+            if (override.baseRarityKey() != null) {
+                effective = effective.withBaseRarityKey(override.baseRarityKey());
+            }
             effective = effective.withBehavior(override.applyTo(effective.behavior()));
         }
         Creature finalEffective = effective;
@@ -147,6 +154,13 @@ public final class SpawnService {
             AttributeInstance attr = living.getAttribute(Attribute.MOVEMENT_SPEED);
             if (attr != null) {
                 attr.setBaseValue(attr.getBaseValue() * behavior.movementSpeedMultiplier());
+            }
+            // Bee・Fish系はAttribute.MOVEMENT_SPEED（FLYING_SPEEDも同様）がバニラ側で
+            // 反映されない既知の問題があるため（MovementSpeedGoalのクラスコメント参照）、
+            // これらの種別だけは毎tick直接velocityを補正するGoalで倍率を効かせる。
+            if ((spawned instanceof Bee || spawned instanceof Fish) && spawned instanceof Mob speedMob) {
+                Bukkit.getMobGoals().addGoal(speedMob, 2,
+                        new MovementSpeedGoal(speedMob, behavior.movementSpeedMultiplier()));
             }
         }
 

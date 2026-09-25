@@ -40,4 +40,18 @@ public record ApproachOverrides(
     public double windowSeconds(double fallback) {
         return windowSeconds != null ? windowSeconds : fallback;
     }
+
+    /**
+     * baseの上書きに、nullでないフィールドだけ重ねて適用した結果を返す（thisの方を優先）。
+     * マーカーの生物枠ごとの上書きを、creatures.yml側の上書きに重ねるのに使う。
+     */
+    public ApproachOverrides applyTo(ApproachOverrides base) {
+        return new ApproachOverrides(
+                patienceSeconds != null ? patienceSeconds : base.patienceSeconds,
+                retryIntervalSeconds != null ? retryIntervalSeconds : base.retryIntervalSeconds,
+                triggerChance != null ? triggerChance : base.triggerChance,
+                minApproachSeconds != null ? minApproachSeconds : base.minApproachSeconds,
+                maxApproachSeconds != null ? maxApproachSeconds : base.maxApproachSeconds,
+                windowSeconds != null ? windowSeconds : base.windowSeconds);
+    }
 }

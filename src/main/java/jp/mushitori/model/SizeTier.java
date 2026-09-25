@@ -100,8 +100,18 @@ public record SizeTier(String key, String name, double weight, double priceMult,
             return List.copyOf(ordered);
         }
 
+        /**
+         * tierの並び順での位置を返す。{@code equals}（recordの全フィールド一致）ではなく
+         * キーだけで比較する（サイズ分布テンプレートは同じキーでもweightが違う別オブジェクトに
+         * なるため、{@code List#indexOf}のようなequals比較だと見つからず、常に-1＝
+         * {@code Math.max(0, -1)}経由で「最もちいさい」段階に固定されてしまう不具合があった）。
+         */
         public int indexOf(SizeTier tier) {
-            return ordered.indexOf(tier);
+            if (tier == null) return -1;
+            for (int i = 0; i < ordered.size(); i++) {
+                if (ordered.get(i).key().equals(tier.key())) return i;
+            }
+            return -1;
         }
 
         public int size() {

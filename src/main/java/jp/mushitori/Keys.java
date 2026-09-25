@@ -51,6 +51,7 @@ public final class Keys {
     public static NamespacedKey FLYING_OVERRIDE;
     public static NamespacedKey ESCAPE_CHANCE_OVERRIDE;
     public static NamespacedKey ESCAPE_DESPAWNS_OVERRIDE;
+    public static NamespacedKey APPROACH_OVERRIDE;
     public static NamespacedKey MARKER_WAND;
     public static NamespacedKey TRADER;
     public static NamespacedKey TRADE_PRICE_PREVIEW;
@@ -91,6 +92,7 @@ public final class Keys {
         FLYING_OVERRIDE = key("flying_override");
         ESCAPE_CHANCE_OVERRIDE = key("escape_chance_override");
         ESCAPE_DESPAWNS_OVERRIDE = key("escape_despawns_override");
+        APPROACH_OVERRIDE = key("approach_override");
         MARKER_WAND = key("marker_wand");
         TRADER = key("trader");
         TRADE_PRICE_PREVIEW = key("trade_price_preview");
