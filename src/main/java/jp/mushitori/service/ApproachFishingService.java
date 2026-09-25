@@ -203,21 +203,29 @@ public final class ApproachFishingService {
     }
 
     /**
-     * 浮きが「実質的に」水に浮いているかどうか。{@code FishHook#isInWater()}だけで判定すると、
-     * 浮きが波で上下にわずかに揺れる（bob）タイミングによっては、普通に浮かせているだけでも
-     * 瞬間的にfalseを返すことがあり、これをそのまま「水面から離れた」と扱うと、待機・誘導が
-     * 頻繁に誤って打ち切られてしまっていた。{@code isInWater()}がfalseでも、浮きの位置の
-     * すぐ上下1ブロックの範囲に水ブロックがあれば、まだ水面に浮いているとみなす。
+     * 「実質的に」水に浮いている／水中にいるかどうか。{@code Entity#isInWater()}（浮きの場合は
+     * {@code FishHook#isInWater()}）だけで判定すると、波で上下にわずかに揺れる（bob）
+     * タイミングによっては、普通に水面にいるだけでも瞬間的にfalseを返すことがあり、これを
+     * そのまま「水から出た」と扱うと、待機・誘導の打ち切りや、魚が陸に上がったと誤認して
+     * 跳ねる演出（{@link #hopTowardWater}）が水面で誤発動する原因になっていた。
+     * {@code isInWater()}がfalseでも、対象位置のすぐ上下1ブロックの範囲に水ブロックがあれば、
+     * まだ水の中にいるとみなす。
      */
-    private boolean isEffectivelyInWater(FishHook hook) {
-        if (hook.isInWater()) return true;
-        Location loc = hook.getLocation();
+    private boolean isEffectivelyInWater(Location loc) {
         World world = loc.getWorld();
         if (world == null) return false;
         for (double dy = -1.0; dy <= 1.0; dy += 0.5) {
             if (world.getBlockAt(loc.clone().add(0, dy, 0)).getType() == Material.WATER) return true;
         }
         return false;
+    }
+
+    private boolean isEffectivelyInWater(FishHook hook) {
+        return hook.isInWater() || isEffectivelyInWater(hook.getLocation());
+    }
+
+    private boolean isEffectivelyInWater(Entity entity) {
+        return entity.isInWater() || isEffectivelyInWater(entity.getLocation());
     }
 
     /**
@@ -421,7 +429,7 @@ public final class ApproachFishingService {
                 if (remaining[0] > 1) remaining[0]--; // ペース基準は1で下げ止め（速度計算の分母を守る）
                 giveUpRemaining[0]--;
 
-                if (!lureFish.isInWater()) {
+                if (!isEffectivelyInWater(lureFish)) {
                     // 何らかの理由で陸に上がってしまった：ぴちぴちと跳ねながら、
                     // 近くの水へ少しずつ戻す（浮きへの接近は、水に戻るまでお預け）
                     hopTowardWater(lureFish);
@@ -785,7 +793,7 @@ public final class ApproachFishingService {
         long now = System.currentTimeMillis();
         for (Entity e : world.getNearbyEntities(hook.getLocation(), noticeRadius, noticeRadius, noticeRadius)) {
             if (!e.isValid() || reservedFish.contains(e.getUniqueId())) continue;
-            if (!e.isInWater()) continue; // 水中にいない個体は対象外
+            if (!isEffectivelyInWater(e)) continue; // 水中にいない個体は対象外
             Long cooldownUntil = fishCooldownUntil.get(e.getUniqueId());
             if (cooldownUntil != null && cooldownUntil > now) continue;
             String creatureId = plugin.spawnService().creatureIdOf(e);
