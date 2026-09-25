@@ -243,9 +243,9 @@ public final class CreatureDetailGui implements InventoryHolder {
 
     /**
      * glint=true のとき、実際にはエンチャントせず、見た目のキラキラ（エンチャント光沢）だけを
-     * 付ける（Enchantment.LUCKをダミーで付与し、HIDE_ENCHANTSでツールチップのテキストだけ隠す、
-     * という昔からある定番の手法）。「上書きが設定されている」ことを、素材を変えずに
-     * ひと目で分かるようにするため。
+     * 付ける（Enchantment.LUCK_OF_THE_SEAをダミーで付与し、HIDE_ENCHANTSでツールチップの
+     * テキストだけ隠す、という昔からある定番の手法）。「上書きが設定されている」ことを、
+     * 素材を変えずにひと目で分かるようにするため。
      */
     private static ItemStack icon(Material material, boolean glint, Component name, List<Component> lore) {
         ItemStack item = new ItemStack(material);
@@ -253,7 +253,7 @@ public final class CreatureDetailGui implements InventoryHolder {
             meta.displayName(name.decoration(TextDecoration.ITALIC, false));
             meta.lore(lore);
             if (glint) {
-                meta.addEnchant(Enchantment.LUCK, 1, true);
+                meta.addEnchant(Enchantment.LUCK_OF_THE_SEA, 1, true);
                 meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
             }
         });
