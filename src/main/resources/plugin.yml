@@ -1,5 +1,5 @@
 name: Mushitori
-version: '0.38.0'
+version: '${project.version}'
 main: jp.mushitori.MushitoriPlugin
 api-version: '26.2'
 description: 虫取り・釣りゲームの図鑑システム

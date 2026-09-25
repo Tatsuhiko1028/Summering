@@ -6,7 +6,8 @@
 
   <groupId>jp.mushitori</groupId>
   <artifactId>Mushitori</artifactId>
-  <version>0.1.0</version>
+  <!-- バージョンはここに一本化（jar名と plugin.yml の version の両方に反映される） -->
+  <version>0.39.0</version>
   <packaging>jar</packaging>
   <name>Mushitori</name>
   <description>虫取り・釣りゲームの図鑑システム</description>
@@ -53,11 +54,25 @@
       </plugin>
     </plugins>
     <!--
-      src/main/resources の中身（plugin.yml, config.yml, creatures.yml）は
-      Maven のデフォルト設定でそのまま jar のルートに入る。
-      以前は plugin.yml だけ変数展開（${project.version}）するために
-      filtering を分けていたが、環境によって不安定だったため、
-      plugin.yml 側の version は固定値に変更してこの仕組みは撤去した。
+      plugin.yml だけ変数展開（${project.version}）する。config.yml 等は
+      日本語や ${...} 風の文字列を壊さないよう、展開せずそのまま jar に入れる。
+      ※ Maven 以外（IDE独自のビルド等）で jar を作ると展開されないので注意。
     -->
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+        <filtering>true</filtering>
+        <includes>
+          <include>plugin.yml</include>
+        </includes>
+      </resource>
+      <resource>
+        <directory>src/main/resources</directory>
+        <filtering>false</filtering>
+        <excludes>
+          <exclude>plugin.yml</exclude>
+        </excludes>
+      </resource>
+    </resources>
   </build>
 </project>

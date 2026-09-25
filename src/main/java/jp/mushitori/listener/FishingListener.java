@@ -73,7 +73,9 @@ public final class FishingListener implements Listener {
                     handleVanillaCatch(event, player);
                 }
             }
-            case CAUGHT_ENTITY, FAILED_ATTEMPT, REEL_IN ->
+            // FAILED_ATTEMPT はプレイヤーの操作ではなく、バニラのアタリを見逃したときにサーバー側で
+            // 自動発火するため含めない（含めると、誘導中の魚が勝手に逃げてしまう）
+            case CAUGHT_ENTITY, REEL_IN ->
                     plugin.approachFishingService().onReelAttempt(player);
             case IN_GROUND -> plugin.approachFishingService().cancel(player);
             default -> {

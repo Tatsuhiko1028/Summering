@@ -369,14 +369,14 @@ public final class ApproachFishingService {
 
             t.cancel();
             waitingTasks.remove(playerId);
-            beginLure(player, hook, chosen, rodSizeBonus, rodEscapeModifier);
+            beginLure(player, hook, chosen, rodSizeBonus, rodEscapeModifier, rodTags);
         }, () -> waitingTasks.remove(playerId), patienceTicks, retryTicks);
 
         waitingTasks.put(playerId, task);
     }
 
     private void beginLure(Player player, FishHook hook, Entity fish, double rodSizeBonus,
-                           double rodEscapeModifier) {
+                           double rodEscapeModifier, Set<String> rodTags) {
         String creatureId = plugin.spawnService().creatureIdOf(fish);
         Creature creature = creatureId == null ? null : plugin.creatures().get(creatureId);
         if (creature == null) {
@@ -463,6 +463,11 @@ public final class ApproachFishingService {
                     log("振るタイミングを逃し、魚は去っていきました。");
                     task.cancel();
                     cancel(player);
+                    if (isEffectivelyInWater(hook)) {
+                        // 浮きがまだ水面にあれば、竿を投げ直さなくても次の個体の判定を再開する
+                        log("浮きはまだ水面にあるため、判定を再開します。");
+                        beginWaiting(player, hook, rodSizeBonus, rodEscapeModifier, rodTags);
+                    }
                 }
             }
         }, () -> cleanupOnRetire(player.getUniqueId(), session), intervalTicks, intervalTicks);
