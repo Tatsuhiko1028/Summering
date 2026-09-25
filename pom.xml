@@ -7,7 +7,7 @@
   <groupId>jp.mushitori</groupId>
   <artifactId>Mushitori</artifactId>
   <!-- バージョンはここに一本化（jar名と plugin.yml の version の両方に反映される） -->
-  <version>0.40.0</version>
+  <version>0.41.0</version>
   <packaging>jar</packaging>
   <name>Mushitori</name>
   <description>虫取り・釣りゲームの図鑑システム</description>

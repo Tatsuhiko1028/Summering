@@ -26,6 +26,7 @@ import org.bukkit.util.Vector;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -116,6 +117,8 @@ public final class ApproachFishingService {
     private final MushitoriPlugin plugin;
     /** 誘導（追跡フェーズ／振るタイミング待ち）に入っているセッション。 */
     private final Map<UUID, Session> sessions = new ConcurrentHashMap<>();
+    /** 待機中に、個体ごとの判定時刻が来たかを確認する間隔（tick）。 */
+    private static final long WAIT_CHECK_TICKS = 5L;
     /** まだ誘導は始まっていない「様子を見ている」待機タスク。 */
     private final Map<UUID, ScheduledTask> waitingTasks = new ConcurrentHashMap<>();
     /** 反応したが選ばれなかった魚が、浮きの近くをうろついている間のタスク（エンティティUUID単位）。 */
@@ -290,32 +293,20 @@ public final class ApproachFishingService {
                               Set<String> rodTags) {
         List<Entity> nearby = findNearbyFishes(hook, rodTags);
         // 最初に見つからなくても、ここでは諦めない（一定間隔ごとに探し続ける。下のタスクを参照）。
-        // 待ち時間（patience/retry）は、見つかっていれば一番近い個体の設定を、
-        // まだ見つかっていなければ既定値を基準にする。
-        ApproachOverrides baseOverrides = ApproachOverrides.EMPTY;
-        if (!nearby.isEmpty()) {
-            Entity closest = nearby.get(0);
-            String closestCreatureId = plugin.spawnService().creatureIdOf(closest);
-            Creature closestCreature = closestCreatureId == null ? null : plugin.creatures().get(closestCreatureId);
-            if (closestCreature != null) {
-                baseOverrides = plugin.ambientSpawnService().effectiveApproachOverrides(closest, closestCreature);
-            }
-        }
-
-        double effectivePatience = baseOverrides.patienceSeconds(patienceSeconds);
-        double effectiveRetry = baseOverrides.retryIntervalSeconds(retryIntervalSeconds);
-
         if (nearby.isEmpty()) {
-            log("近くに設置済みの対象個体がまだいません。" + effectiveRetry + "秒おきに探し続けます。");
+            log("近くに設置済みの対象個体がまだいません。探し続けます。");
         } else {
-            log(nearby.size() + "匹の対象個体を確認。" + effectivePatience + "秒待つと反応判定を始めます。");
+            log(nearby.size() + "匹の対象個体を確認。個体ごとの待ち時間・周期で反応判定を始めます。");
         }
 
-        long patienceTicks = Math.max(1L, Math.round(effectivePatience * 20.0));
-        long retryTicks = Math.max(1L, Math.round(effectiveRetry * 20.0));
         UUID playerId = player.getUniqueId();
+        // 待ち始めてからの経過tick（個体ごとの「最初の patience 秒は反応なし」の基準）
+        long[] elapsed = {0};
+        // 個体ごとの次の判定時刻（elapsed基準）。初めて見つけたときに、その個体の patience から決める
+        Map<UUID, Long> nextRollAt = new HashMap<>();
 
         ScheduledTask task = hook.getScheduler().runAtFixedRate(plugin, t -> {
+            elapsed[0] += WAIT_CHECK_TICKS;
             if (!hook.isValid() || !player.isOnline()) {
                 t.cancel();
                 waitingTasks.remove(playerId);
@@ -328,31 +319,38 @@ public final class ApproachFishingService {
                 return;
             }
             List<Entity> candidates = findNearbyFishes(hook, rodTags);
-            if (candidates.isEmpty()) {
-                log("範囲内に対象個体がいません。引き続き探します。");
-                return;
-            }
 
-            // それぞれの個体が「独立して」確率判定する（個体が多いほど、誰かが反応しやすい）。
+            // それぞれの個体が、自分の patience / retry-interval / trigger-chance で「独立して」判定する
+            // （魚の種類ごとに寄ってくるタイミング・確率が違い、ゆっくり待つほど何かが反応する）。
             // 浮きへの経路がそもそも見つからない個体（地面に近い・孤立した水たまり等）は、
             // 判定対象にすら入れない。
             List<Entity> succeeded = new ArrayList<>();
+            int rolled = 0;
             Set<UUID> unreachable = unreachableFish.getOrDefault(playerId, Set.of());
             for (Entity candidate : candidates) {
-                if (unreachable.contains(candidate.getUniqueId())) continue;
-                if (!hasPathToHook(candidate, hook)) continue;
+                UUID candidateId = candidate.getUniqueId();
+                if (unreachable.contains(candidateId)) continue;
                 String candidateCreatureId = plugin.spawnService().creatureIdOf(candidate);
                 Creature candidateCreature = candidateCreatureId == null ? null : plugin.creatures().get(candidateCreatureId);
-                double candidateTrigger = candidateCreature == null
-                        ? triggerChance
-                        : plugin.ambientSpawnService().effectiveApproachOverrides(candidate, candidateCreature)
-                                .triggerChance(triggerChance);
-                if (ThreadLocalRandom.current().nextDouble() <= candidateTrigger) {
+                ApproachOverrides overrides = candidateCreature == null
+                        ? ApproachOverrides.EMPTY
+                        : plugin.ambientSpawnService().effectiveApproachOverrides(candidate, candidateCreature);
+                long candidatePatience = Math.round(overrides.patienceSeconds(patienceSeconds) * 20.0);
+                long candidateRetry = Math.max(1L, Math.round(overrides.retryIntervalSeconds(retryIntervalSeconds) * 20.0));
+                long due = nextRollAt.computeIfAbsent(candidateId, k -> Math.max(candidatePatience, elapsed[0]));
+                if (elapsed[0] < due) continue;
+                nextRollAt.put(candidateId, elapsed[0] + candidateRetry);
+
+                if (!hasPathToHook(candidate, hook)) continue;
+                rolled++;
+                if (ThreadLocalRandom.current().nextDouble() <= overrides.triggerChance(triggerChance)) {
                     succeeded.add(candidate);
                 }
             }
             if (succeeded.isEmpty()) {
-                log(candidates.size() + "匹それぞれ判定しましたが、今回はどれもハズレでした。もうしばらく待ちます。");
+                if (rolled > 0) {
+                    log(rolled + "匹が判定しましたが、今回はどれもハズレでした。もうしばらく待ちます。");
+                }
                 return;
             }
 
@@ -364,7 +362,7 @@ public final class ApproachFishingService {
                 log("反応した個体は、ちょうど他のプレイヤーに取られてしまいました。もうしばらく待ちます。");
                 return;
             }
-            log(candidates.size() + "匹中" + succeeded.size() + "匹が反応。1匹が寄ってきます。");
+            log(rolled + "匹中" + succeeded.size() + "匹が反応。1匹が寄ってきます。");
 
             // 反応したが選ばれなかった魚は、一部（loiter-chance）が浮きの近くをうろつく演出に回る。
             for (Entity notChosen : succeeded) {
@@ -377,7 +375,7 @@ public final class ApproachFishingService {
             t.cancel();
             waitingTasks.remove(playerId);
             beginLure(player, hook, chosen, rodSizeBonus, rodEscapeModifier, rodTags);
-        }, () -> waitingTasks.remove(playerId), patienceTicks, retryTicks);
+        }, () -> waitingTasks.remove(playerId), WAIT_CHECK_TICKS, WAIT_CHECK_TICKS);
 
         waitingTasks.put(playerId, task);
     }
@@ -861,11 +859,44 @@ public final class ApproachFishingService {
 
     /** 近くの水中を探す。見つからなければ現在地のまま（水の中にしかテレポートしない＝地面に埋まらない）。 */
     private Location findNearbyWaterOrKeep(Location from) {
-        Location found = findNearestWaterBlock(from, (int) Math.ceil(relocateRadius));
+        // 一番近い水だと自分のいるブロックになり、ほぼ移動しないため、範囲内の水からランダムに選ぶ
+        Location found = findRandomWaterBlock(from, (int) Math.ceil(relocateRadius));
         if (found != null) return found;
         // 見つからなければ、現在地に留まる。ただし現在地自体がブロックに埋まっている
         // （固体ブロック内）場合は、真上へ少しずつ抜け出す（水中への埋没はOKなので判定しない）
         return unstuckIfEmbedded(from);
+    }
+
+    /**
+     * 範囲内の水ブロックからランダムに1つ選ぶ（見つからなければ null）。
+     * できるだけ離れた場所に逃げたように見せるため、範囲の半分より遠い水を優先する。
+     */
+    @Nullable
+    private Location findRandomWaterBlock(Location from, int searchRadius) {
+        World world = from.getWorld();
+        if (world == null) return null;
+        List<Location> far = new ArrayList<>();
+        List<Location> near = new ArrayList<>();
+        double farDistSq = (searchRadius * 0.5) * (searchRadius * 0.5);
+        for (int dx = -searchRadius; dx <= searchRadius; dx++) {
+            for (int dz = -searchRadius; dz <= searchRadius; dz++) {
+                for (int dy = -2; dy <= 2; dy++) {
+                    double distSq = (double) dx * dx + (double) dy * dy + (double) dz * dz;
+                    if (distSq > (double) searchRadius * searchRadius) continue;
+                    int x = from.getBlockX() + dx;
+                    int y = from.getBlockY() + dy;
+                    int z = from.getBlockZ() + dz;
+                    if (world.getBlockAt(x, y, z).getType() != Material.WATER) continue;
+                    Location loc = new Location(world, x + 0.5, y + 0.5, z + 0.5);
+                    (distSq >= farDistSq ? far : near).add(loc);
+                }
+            }
+        }
+        List<Location> pool = far.isEmpty() ? near : far;
+        if (pool.isEmpty()) return null;
+        Location picked = pool.get(ThreadLocalRandom.current().nextInt(pool.size()));
+        picked.setYaw(ThreadLocalRandom.current().nextFloat() * 360f);
+        return picked;
     }
 
     /** その場所が固体ブロックの中に埋まっていたら、埋まっていない高さまで真上へ移動した地点を返す。 */

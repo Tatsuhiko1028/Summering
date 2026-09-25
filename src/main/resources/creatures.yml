@@ -261,10 +261,11 @@ creatures:
     # 限定魚らしく、ベースから「めずらしい」にしておく
     base-rarity: R
     base-scale: 1.0
-    # 例: 人気種なので、共通設定より少し待ち時間を長く・当たりにくくする
+    # 最初の20秒は反応なし。その後、5秒ごとに3%の確率で反応する
     approach:
       patience-seconds: 20.0
-      trigger-chance: 0.20
+      retry-interval-seconds: 5.0
+      trigger-chance: 0.03
 
   iwana:
     name: "イワナ"
@@ -282,4 +283,8 @@ creatures:
     escape-chance: 0.3
     base-rarity: N
     base-scale: 1.0
-    # approach を省略 → config.yml の共通設定（fishing.approach）がそのまま使われる
+    # 最初の15秒は反応なし。その後、3秒ごとに5%の確率で反応する
+    approach:
+      patience-seconds: 15.0
+      retry-interval-seconds: 3.0
+      trigger-chance: 0.05
