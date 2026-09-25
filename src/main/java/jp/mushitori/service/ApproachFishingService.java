@@ -124,6 +124,8 @@ public final class ApproachFishingService {
     private final Set<UUID> reservedFish = ConcurrentHashMap.newKeySet();
     /** 逃げた個体が、次に判定対象へ戻ってよくなる時刻（エンティティUUID → epoch millis）。 */
     private final Map<UUID, Long> fishCooldownUntil = new ConcurrentHashMap<>();
+    /** 誘導中に経路が見つからず解放した個体（プレイヤーごと）。次にキャストし直すまで候補から外す。 */
+    private final Map<UUID, Set<UUID>> unreachableFish = new ConcurrentHashMap<>();
 
     private boolean enabled = true;
     private boolean debug = false;
@@ -136,6 +138,7 @@ public final class ApproachFishingService {
     private double giveUpSeconds = 60.0;
     private double arrivalDistance = 0.2;
     private double approachDepthOffset = 0.4;
+    private double mouthReachRatio = 0.7;
     private double windowSeconds = 1.2;
     private int intervalTicks = 4;
     private double extraSizeBonus = 0.10;
@@ -166,6 +169,7 @@ public final class ApproachFishingService {
         giveUpSeconds = Math.max(maxApproachSeconds, section.getDouble("give-up-seconds", 60.0));
         arrivalDistance = Math.max(0.1, section.getDouble("arrival-distance", 0.2));
         approachDepthOffset = Math.max(0.0, section.getDouble("approach-depth-offset", 0.4));
+        mouthReachRatio = Math.max(0.0, section.getDouble("mouth-reach-ratio", 0.7));
         windowSeconds = Math.max(0.3, section.getDouble("window-seconds", 1.2));
         intervalTicks = Math.max(1, section.getInt("update-interval-ticks", 4));
         extraSizeBonus = Math.max(0.0, section.getDouble("extra-size-bonus", 0.10));
@@ -240,6 +244,7 @@ public final class ApproachFishingService {
                            Set<String> rodTags) {
         if (!enabled) return;
         cancel(player); // 前回分の待機・誘導をリセット
+        unreachableFish.remove(player.getUniqueId());
 
         if (plugin.creatures().fishCreatures().isEmpty()) return;
 
@@ -332,7 +337,9 @@ public final class ApproachFishingService {
             // 浮きへの経路がそもそも見つからない個体（地面に近い・孤立した水たまり等）は、
             // 判定対象にすら入れない。
             List<Entity> succeeded = new ArrayList<>();
+            Set<UUID> unreachable = unreachableFish.getOrDefault(playerId, Set.of());
             for (Entity candidate : candidates) {
+                if (unreachable.contains(candidate.getUniqueId())) continue;
                 if (!hasPathToHook(candidate, hook)) continue;
                 String candidateCreatureId = plugin.spawnService().creatureIdOf(candidate);
                 Creature candidateCreature = candidateCreatureId == null ? null : plugin.creatures().get(candidateCreatureId);
@@ -412,6 +419,7 @@ public final class ApproachFishingService {
         int giveUpUpdates = Math.max(paceUpdates, (int) Math.round(giveUpSeconds * 20.0 / intervalTicks));
         int[] remaining = {paceUpdates};
         int[] giveUpRemaining = {giveUpUpdates};
+        int[] noPathStreak = {0};
 
         lureFish.getScheduler().runAtFixedRate(plugin, task -> {
             Session current = sessions.get(player.getUniqueId());
@@ -443,8 +451,19 @@ public final class ApproachFishingService {
                 }
 
                 Location target = hook.getLocation().clone().subtract(0, approachDepthOffset, 0);
-                boolean arrived = step(lureFish, target, remaining[0]);
-                if (arrived) {
+                StepResult result = step(lureFish, target, remaining[0]);
+                noPathStreak[0] = result == StepResult.NO_PATH ? noPathStreak[0] + 1 : 0;
+                if (noPathStreak[0] >= 3) {
+                    // 失敗扱いにはせず（逃走演出・クールダウンなし）、黙ってこの個体を対象から外す
+                    log(creature.name() + " は3回連続で経路が見つからないため、対象から外しました。");
+                    task.cancel();
+                    releaseSilently(player, session);
+                    if (isEffectivelyInWater(hook)) {
+                        beginWaiting(player, hook, rodSizeBonus, rodEscapeModifier, rodTags);
+                    }
+                    return;
+                }
+                if (result == StepResult.ARRIVED) {
                     session.phase = Phase.WINDOW;
                     holdAtHook(lureFish, target);
                     session.windowTicksLeft = windowUpdates;
@@ -478,14 +497,45 @@ public final class ApproachFishingService {
      * 独自の群れ行動など）を止め、浮きの揺れに合わせて毎回位置を合わせ直す。
      * AIは {@link #handleEscape} で元に戻す（捕獲時は個体ごと消えるため不要）。
      */
-    private void holdAtHook(Entity fish, Location target) {
+    private void holdAtHook(Entity fish, Location mouthTarget) {
         if (fish instanceof Mob mob) {
             mob.setAware(false);
         }
-        target.setDirection(fish.getLocation().getDirection());
         fish.setVelocity(new Vector());
-        fish.teleport(target);
+        fish.teleport(bodyPositionForMouth(fish, mouthTarget, fish.getLocation().getDirection()));
     }
+
+    /**
+     * 口元（顔の少し前）が {@code mouthTarget} に来るように魚を置くときの、魚の基準位置（足元の中心）を返す。
+     * 当たり判定の幅・高さ（scale込み）に合わせて、向き（{@code facing}の水平成分）の後ろ・下へずらす。
+     */
+    private Location bodyPositionForMouth(Entity fish, Location mouthTarget, Vector facing) {
+        Vector dir = facing.clone().setY(0);
+        if (dir.lengthSquared() < 1.0e-6) dir = new Vector(1, 0, 0);
+        dir.normalize();
+        double reach = fish.getWidth() * mouthReachRatio;
+        Location body = mouthTarget.clone()
+                .subtract(dir.clone().multiply(reach))
+                .subtract(0, fish.getHeight() * 0.5, 0);
+        body.setDirection(dir);
+        return body;
+    }
+
+    /**
+     * 経路が見つからない個体を、失敗扱いにせず黙って解放する（逃走演出・クールダウンなし）。
+     * 同じキャストの間は、再び候補に選ばれないようにする。
+     */
+    private void releaseSilently(Player player, Session session) {
+        sessions.remove(player.getUniqueId(), session);
+        reservedFish.remove(session.fish.getUniqueId());
+        if (session.fish instanceof Mob mob) {
+            mob.getPathfinder().stopPathfinding();
+        }
+        unreachableFish.computeIfAbsent(player.getUniqueId(), k -> ConcurrentHashMap.newKeySet())
+                .add(session.fish.getUniqueId());
+    }
+
+    private enum StepResult { ARRIVED, MOVING, NO_PATH }
 
     /** 誘導中・うろつき中など、このサービスが動きを制御している個体か（独自Goalの一時停止判定用）。 */
     public static boolean isControlled(Entity entity) {
@@ -497,15 +547,18 @@ public final class ApproachFishingService {
      * 浮きへの経路がそもそも見つからない個体を、トリガー判定の対象から除外するための判定。
      * {@link com.destroystokyo.paper.entity.Pathfinder#findPath(Location)} は経路を計算するだけで
      * 実際には移動させないため、こうした事前チェック用途に使える。
+     * 目的地に届かなくても「行けるところまでの途中経路」が返るため、null判定だけでなく
+     * {@code canReachFinalPoint()} で最後まで届くかを確認する。
      */
     private boolean hasPathToHook(Entity fish, FishHook hook) {
         if (!(fish instanceof Mob mob)) return true; // パスファインダーを持たない種は判定できないため許可する
         Location target = hook.getLocation().clone().subtract(0, approachDepthOffset, 0);
-        return mob.getPathfinder().findPath(target) != null;
+        var path = mob.getPathfinder().findPath(target);
+        return path != null && path.canReachFinalPoint();
     }
 
     /**
-     * 残り更新回数ぶんで浮きに近づくよう1歩進める。到達したら true。
+     * 残り更新回数ぶんで浮きに近づくよう1歩進める。到達・移動中・経路なしのいずれかを返す。
      *
      * <p>直線移動ではなく、Paperのパスファインダー（{@link com.destroystokyo.paper.entity.Pathfinder}）に
      * 経路探索を任せる。魚のナビゲーションは水中限定のため、これにより「壁や陸地を
@@ -514,42 +567,47 @@ public final class ApproachFishingService {
      * （＝孤立していて捕まえられない）。逆に迂回すれば繋がっている場合は、
      * 経路探索が自然にその迂回ルートを通る。</p>
      */
-    private boolean step(Entity fish, Location hookLocation, int remainingUpdates) {
-        double distance = fish.getLocation().distance(hookLocation);
-        if (distance < arrivalDistance) return true;
+    private StepResult step(Entity fish, Location hookLocation, int remainingUpdates) {
+        // 到達判定・最後の詰めは「口元が浮きに来る体の位置」を基準にする（向きは浮きの方向）
+        Vector facing = hookLocation.toVector().subtract(fish.getLocation().toVector());
+        Location bodyTarget = bodyPositionForMouth(fish, hookLocation, facing);
+        double distance = fish.getLocation().distance(bodyTarget);
+        if (distance < arrivalDistance) return StepResult.ARRIVED;
 
         if (fish instanceof Mob mob && distance < 1.5) {
             // パスファインダーはブロック単位の経路しか引けず、浮きの手前1ブロック以内では
             // 「経路なし」になって止まってしまうため、最後の詰めだけは直線で寄せる
             mob.getPathfinder().stopPathfinding();
             Location current = fish.getLocation();
-            Vector to = hookLocation.toVector().subtract(current.toVector());
+            Vector to = bodyTarget.toVector().subtract(current.toVector());
             Location next = current.clone().add(to.clone().normalize().multiply(Math.min(distance, 0.3)));
-            next.setDirection(to);
+            next.setDirection(facing);
             fish.teleport(next);
-            return false;
+            return StepResult.MOVING;
         }
 
         if (fish instanceof Mob mob) {
+            // 経路探索は浮き（口元の目標）そのものへ向ける（体の位置は壁際だとブロック内に入りうるため）
             double speed = Math.max(0.15, Math.min(1.2, distance / Math.max(1, remainingUpdates) / 0.4));
             boolean pathing = mob.getPathfinder().moveTo(hookLocation, speed);
             if (!pathing) {
                 // 経路が見つからない（浮きと隔離されている等）：直線移動にはフォールバックしない。
-                // 呼び出し側が残り時間切れで自然にあきらめる形にする。
+                // 連続した場合の扱いは呼び出し側で決める。
                 log(fish.getName() + " は浮きへの経路が見つかりません（隔離されている可能性）。");
+                return StepResult.NO_PATH;
             }
-            return false;
+            return StepResult.MOVING;
         }
 
         // パスファインダーを持たない種別への保険：これまで通りの直線移動
         Location current = fish.getLocation();
-        Vector to = hookLocation.toVector().subtract(current.toVector());
+        Vector to = bodyTarget.toVector().subtract(current.toVector());
         int steps = Math.max(1, remainingUpdates);
         Vector move = to.multiply(1.0 / steps);
         Location next = current.clone().add(move);
-        next.setDirection(to);
+        next.setDirection(facing);
         fish.teleport(next);
-        return false;
+        return StepResult.MOVING;
     }
 
     /**
