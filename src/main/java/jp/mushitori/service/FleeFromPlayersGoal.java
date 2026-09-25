@@ -67,7 +67,8 @@ public final class FleeFromPlayersGoal implements Goal<Mob> {
 
     @Override
     public boolean shouldActivate() {
-        return mob.isValid() && nearestPlayer() != null;
+        // 一本釣りで誘導中の個体は、釣り人から逃げてしまわないよう止める
+        return mob.isValid() && !ApproachFishingService.isControlled(mob) && nearestPlayer() != null;
     }
 
     @Override

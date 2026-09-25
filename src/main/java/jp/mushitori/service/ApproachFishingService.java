@@ -21,6 +21,7 @@ import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Mob;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.util.Vector;
 import org.jetbrains.annotations.Nullable;
 
@@ -445,6 +446,7 @@ public final class ApproachFishingService {
                 boolean arrived = step(lureFish, target, remaining[0]);
                 if (arrived) {
                     session.phase = Phase.WINDOW;
+                    holdAtHook(lureFish, target);
                     session.windowTicksLeft = windowUpdates;
                     player.playSound(hook.getLocation(), windowStartSound, 1.0f, 1.3f);
                     hook.getWorld().spawnParticle(Particle.SPLASH, hook.getLocation(), 14, 0.2, 0.1, 0.2, 0.02);
@@ -455,6 +457,7 @@ public final class ApproachFishingService {
                     cancel(player);
                 }
             } else {
+                holdAtHook(lureFish, hook.getLocation().clone().subtract(0, approachDepthOffset, 0));
                 session.windowTicksLeft--;
                 if (session.windowTicksLeft <= 0) {
                     log("振るタイミングを逃し、魚は去っていきました。");
@@ -463,6 +466,26 @@ public final class ApproachFishingService {
                 }
             }
         }, () -> cleanupOnRetire(player.getUniqueId(), session), intervalTicks, intervalTicks);
+    }
+
+    /**
+     * 判定時間中、魚を浮きの位置に固定する。AI（バニラの「プレイヤーから逃げる」や
+     * 独自の群れ行動など）を止め、浮きの揺れに合わせて毎回位置を合わせ直す。
+     * AIは {@link #handleEscape} で元に戻す（捕獲時は個体ごと消えるため不要）。
+     */
+    private void holdAtHook(Entity fish, Location target) {
+        if (fish instanceof Mob mob) {
+            mob.setAware(false);
+        }
+        target.setDirection(fish.getLocation().getDirection());
+        fish.setVelocity(new Vector());
+        fish.teleport(target);
+    }
+
+    /** 誘導中・うろつき中など、このサービスが動きを制御している個体か（独自Goalの一時停止判定用）。 */
+    public static boolean isControlled(Entity entity) {
+        return JavaPlugin.getPlugin(MushitoriPlugin.class).approachFishingService()
+                .reservedFish.contains(entity.getUniqueId());
     }
 
     /**
@@ -618,7 +641,8 @@ public final class ApproachFishingService {
         if (session == null) return false;
 
         if (session.phase != Phase.WINDOW) {
-            cancel(player); // 早すぎるタイミング：魚は逃げる（無言）
+            log("浮きに密着する前に竿を上げたため、" + session.creature.name() + " は逃げました。");
+            cancel(player); // 早すぎるタイミング：魚は逃げる（プレイヤーには無言）
             return false;
         }
 
@@ -724,6 +748,9 @@ public final class ApproachFishingService {
         if (session == null) return;
         reservedFish.remove(session.fish.getUniqueId());
         Entity fish = session.fish;
+        if (fish instanceof Mob mob) {
+            mob.setAware(true); // 判定時間中の固定（holdAtHook）を解除
+        }
         if (!fish.isValid()) return;
 
         if (escapeCooldownSeconds > 0) {

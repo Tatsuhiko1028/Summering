@@ -58,7 +58,8 @@ public final class SchoolingGoal implements Goal<Mob> {
 
     @Override
     public boolean shouldActivate() {
-        return mob.isValid() && creatureId != null;
+        // 一本釣りで誘導中の個体は、群れに引っ張られないよう止める
+        return mob.isValid() && creatureId != null && !ApproachFishingService.isControlled(mob);
     }
 
     @Override
