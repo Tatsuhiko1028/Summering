@@ -63,6 +63,10 @@
 #           自動的に非表示にしています。
 # custom-model-data: リソースパックの overrides 側の custom_model_data と一致させる数値。
 #                     省略した場合は material そのままの見た目になります。
+# bypass-catch-restriction: （任意・既定false）trueにすると、creatures.yml側の
+#                     allow-net: false（＝この網では捕まえられない設定）を無視して、
+#                     どんな生物でも捕まえられるようになります。基本デバッグ用です。
+#                     required-tags の制限はこれとは別物で、引き続き適用されます。
 nets:
   my_net:
     name: "いつものの虫とり網"
@@ -98,3 +102,14 @@ nets:
     range: 4.0
     price: 15000
     durability: 0
+  debug_fishnet:
+    name: "【デバッグ】なんでも網"
+    description:
+      - "管理者・デバッグ専用。allow-netがfalseの生物（魚など）も捕まえられる。"
+    material: NETHERITE_SWORD
+    custom-model-data: 20099
+    escape-modifier: -1.0
+    size-bonus: 0.0
+    price: 0
+    durability: 0
+    bypass-catch-restriction: true

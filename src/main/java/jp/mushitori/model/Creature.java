@@ -28,6 +28,10 @@ import java.util.List;
  *                  道具（網・竿）側のタグが、ここで指定した全てを含んでいないと捕まえられません
  * @param flying 空を飛ぶ生物かどうか（素手での捕獲難易度に影響。省略時はentityがBEEなら
  *                  true、それ以外はfalse）
+ * @param suppressHostility バニラ側の敵対AI（プレイヤーを攻撃する等）を無効化するか
+ *                  （例: シルバーフィッシュを見た目に使った虫。省略時はfalse＝バニラのまま）
+ * @param allowBareHand 素手で捕まえられるか（省略時はBUGならtrue、FISHならfalse）
+ * @param allowNet 虫取り網で捕まえられるか（省略時はBUGならtrue、FISHならfalse）
  */
 public record Creature(
         String id,
@@ -49,7 +53,10 @@ public record Creature(
         double baseScale,
         CreatureBehavior behavior,
         java.util.Set<String> requiredTags,
-        boolean flying
+        boolean flying,
+        boolean suppressHostility,
+        boolean allowBareHand,
+        boolean allowNet
 ) {
     /** サイズ 0.0〜1.0 の位置を返す（価格計算用）。 */
     public double sizeRatio(double sizeCm) {
@@ -66,27 +73,31 @@ public record Creature(
     public Creature withBaseScale(double newBaseScale) {
         return new Creature(id, name, category, sizeMin, sizeMax, basePrice, habitat, description, material,
                 customModelData, entityType, order, escapeChance, baseRarityKey, sizeRarityTemplate,
-                tropicalFishVariant, newBaseScale, behavior, requiredTags, flying);
+                tropicalFishVariant, newBaseScale, behavior, requiredTags, flying,
+                suppressHostility, allowBareHand, allowNet);
     }
 
     /** behaviorだけを差し替えたコピーを返す（マーカーの生物枠ごとの上書き用）。 */
     public Creature withBehavior(CreatureBehavior newBehavior) {
         return new Creature(id, name, category, sizeMin, sizeMax, basePrice, habitat, description, material,
                 customModelData, entityType, order, escapeChance, baseRarityKey, sizeRarityTemplate,
-                tropicalFishVariant, baseScale, newBehavior, requiredTags, flying);
+                tropicalFishVariant, baseScale, newBehavior, requiredTags, flying,
+                suppressHostility, allowBareHand, allowNet);
     }
 
     /** sizeRarityTemplateだけを差し替えたコピーを返す（マーカーの生物枠ごとの上書き用）。 */
     public Creature withSizeRarityTemplate(@Nullable String newSizeRarityTemplate) {
         return new Creature(id, name, category, sizeMin, sizeMax, basePrice, habitat, description, material,
                 customModelData, entityType, order, escapeChance, baseRarityKey, newSizeRarityTemplate,
-                tropicalFishVariant, baseScale, behavior, requiredTags, flying);
+                tropicalFishVariant, baseScale, behavior, requiredTags, flying,
+                suppressHostility, allowBareHand, allowNet);
     }
 
     /** baseRarityKeyだけを差し替えたコピーを返す（マーカーの生物枠ごとの上書き用）。 */
     public Creature withBaseRarityKey(String newBaseRarityKey) {
         return new Creature(id, name, category, sizeMin, sizeMax, basePrice, habitat, description, material,
                 customModelData, entityType, order, escapeChance, newBaseRarityKey, sizeRarityTemplate,
-                tropicalFishVariant, baseScale, behavior, requiredTags, flying);
+                tropicalFishVariant, baseScale, behavior, requiredTags, flying,
+                suppressHostility, allowBareHand, allowNet);
     }
 }

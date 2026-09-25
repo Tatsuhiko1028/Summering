@@ -16,6 +16,10 @@ package jp.mushitori.model;
  *                          1.0未満でゆっくり、1.0より大きいと素早く動く
  * @param escapeDespawns    捕まえそこねて逃げられたとき、近くへ瞬間移動する（既定の動き）のではなく、
  *                          その場で完全に消える（≒逃がしたら最後、もう追えない）ようにするか
+ * @param schooling         近くにいる、同じ生物ID（creature_id。バニラのentity種別ではなく
+ *                          プラグイン独自のID基準）の個体どうしで寄り集まる動きを追加するか
+ * @param schoolingRadius   仲間を探す範囲（ブロック）
+ * @param schoolingSpeed    群れの中心へ向かう速度（バニラのMob移動速度に対する倍率）
  */
 public record CreatureBehavior(
         boolean disableNectar,
@@ -23,10 +27,13 @@ public record CreatureBehavior(
         double fleeRadius,
         double fleeSpeed,
         double movementSpeedMultiplier,
-        boolean escapeDespawns
+        boolean escapeDespawns,
+        boolean schooling,
+        double schoolingRadius,
+        double schoolingSpeed
 ) {
     private static final CreatureBehavior DEFAULT =
-            new CreatureBehavior(true, false, 5.0, 1.0, 1.0, false);
+            new CreatureBehavior(true, false, 5.0, 1.0, 1.0, false, false, 8.0, 1.0);
 
     /** creatures.yml に behavior セクションが無い生物向けの既定値。 */
     public static CreatureBehavior defaults() {

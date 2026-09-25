@@ -37,6 +37,7 @@ public final class Keys {
     public static NamespacedKey GEAR_SIZE_BONUS;
     public static NamespacedKey GEAR_RANGE;
     public static NamespacedKey GEAR_TAGS;
+    public static NamespacedKey GEAR_BYPASS_CATCH_RESTRICTION;
     public static NamespacedKey GUIDE;
     public static NamespacedKey MONEY_DENOMINATION;
     public static NamespacedKey MONEY_TYPE;
@@ -52,6 +53,9 @@ public final class Keys {
     public static NamespacedKey ESCAPE_CHANCE_OVERRIDE;
     public static NamespacedKey ESCAPE_DESPAWNS_OVERRIDE;
     public static NamespacedKey APPROACH_OVERRIDE;
+    public static NamespacedKey SUPPRESS_HOSTILITY_OVERRIDE;
+    public static NamespacedKey ALLOW_BARE_HAND_OVERRIDE;
+    public static NamespacedKey ALLOW_NET_OVERRIDE;
     public static NamespacedKey MARKER_WAND;
     public static NamespacedKey TRADER;
     public static NamespacedKey TRADE_PRICE_PREVIEW;
@@ -78,6 +82,7 @@ public final class Keys {
         GEAR_SIZE_BONUS = key("gear_size_bonus");
         GEAR_RANGE = key("gear_range");
         GEAR_TAGS = key("gear_tags");
+        GEAR_BYPASS_CATCH_RESTRICTION = key("gear_bypass_catch_restriction");
         GUIDE = key("guide");
         MONEY_DENOMINATION = key("money_denomination");
         MONEY_TYPE = key("money_type");
@@ -93,6 +98,9 @@ public final class Keys {
         ESCAPE_CHANCE_OVERRIDE = key("escape_chance_override");
         ESCAPE_DESPAWNS_OVERRIDE = key("escape_despawns_override");
         APPROACH_OVERRIDE = key("approach_override");
+        SUPPRESS_HOSTILITY_OVERRIDE = key("suppress_hostility_override");
+        ALLOW_BARE_HAND_OVERRIDE = key("allow_bare_hand_override");
+        ALLOW_NET_OVERRIDE = key("allow_net_override");
         MARKER_WAND = key("marker_wand");
         TRADER = key("trader");
         TRADE_PRICE_PREVIEW = key("trade_price_preview");

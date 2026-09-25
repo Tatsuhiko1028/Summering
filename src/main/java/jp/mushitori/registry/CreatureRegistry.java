@@ -142,6 +142,9 @@ public final class CreatureRegistry {
         CreatureBehavior behavior = readBehavior(s.getConfigurationSection("behavior"));
         java.util.Set<String> requiredTags = new java.util.LinkedHashSet<>(s.getStringList("required-tags"));
         boolean flying = s.contains("flying") ? s.getBoolean("flying") : (entity == EntityType.BEE);
+        boolean suppressHostility = s.getBoolean("suppress-hostility", false);
+        boolean allowBareHand = s.contains("allow-bare-hand") ? s.getBoolean("allow-bare-hand") : !category.isFish();
+        boolean allowNet = s.contains("allow-net") ? s.getBoolean("allow-net") : !category.isFish();
 
         return new Creature(id, name, category, min, max, price, habitat, desc, material, customModelData, entity, order,
                 s.getDouble("escape-chance", defaultEscapeChance),
@@ -151,7 +154,10 @@ public final class CreatureRegistry {
                 baseScale,
                 behavior,
                 requiredTags,
-                flying);
+                flying,
+                suppressHostility,
+                allowBareHand,
+                allowNet);
     }
 
     /** creatures.yml の behavior セクションを読み込む。省略されていれば既定値。 */
@@ -164,7 +170,10 @@ public final class CreatureRegistry {
                 s.getDouble("flee-radius", d.fleeRadius()),
                 s.getDouble("flee-speed", d.fleeSpeed()),
                 s.getDouble("movement-speed-multiplier", d.movementSpeedMultiplier()),
-                s.getBoolean("escape-despawns", d.escapeDespawns()));
+                s.getBoolean("escape-despawns", d.escapeDespawns()),
+                s.getBoolean("schooling", d.schooling()),
+                s.getDouble("schooling-radius", d.schoolingRadius()),
+                s.getDouble("schooling-speed", d.schoolingSpeed()));
     }
 
     @Nullable

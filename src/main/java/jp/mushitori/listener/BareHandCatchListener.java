@@ -31,7 +31,10 @@ import java.util.concurrent.ThreadLocalRandom;
  *   <li>そこから一律 -50%（例：本来100%で捕まえられる生物でも、素手では50%まで下がる）</li>
  *   <li>対象が空を飛ぶ生物（{@code creature.flying}）の場合は、そこからさらに×0.1
  *       （例：50% → 5%。9割方失敗するようになる）</li>
- *   <li>対象が魚（FISHカテゴリ）の場合は、そもそも対象外（釣竿でのみ捕まえられます）</li>
+ *   <li>{@code creature.allowBareHand()}（マーカーの生物枠ごとの上書きも含む）がfalseの
+ *       生物は、そもそも対象外です（省略時はFISHならfalse＝釣竿限定、BUGならtrue）。
+ *       素手が届かないと分かった時点で、捕獲失敗の表示ではなく実際に逃げて（テレポートして）
+ *       もらいます（他の取り逃しと同じ演出に揃えるため）。</li>
  * </ol>
  *
  * <p>タグ（{@code required-tags}。マーカーの生物枠ごとの上書きも含む）が設定されている
@@ -70,8 +73,15 @@ public final class BareHandCatchListener implements Listener {
 
         event.setCancelled(true);
 
-        if (creature.category().isFish()) {
-            player.sendActionBar(Component.text("魚は素手では捕まえられません（釣竿が必要です）。", NamedTextColor.GRAY));
+        if (!plugin.ambientSpawnService().effectiveAllowBareHand(target, creature)) {
+            // 以前は「捕まえられません」の表示だけで終わっていたが、他の逃走演出と
+            // 挙動を揃えるため、素手では届かないと分かった時点で逃げて（テレポートして）もらう。
+            if (plugin.ambientSpawnService().effectiveEscapeDespawns(target, creature)) {
+                EscapeEffects.puff(target.getLocation(), plugin.netEscapeSound());
+                target.remove();
+            } else {
+                EscapeEffects.escapeNearby(plugin, target, plugin.netEscapeTeleportRadius(), plugin.netEscapeSound());
+            }
             return;
         }
 

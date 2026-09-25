@@ -29,10 +29,10 @@ import java.util.List;
  * ものを、テーマ（行）ごとにグループ化して並べています。
  *
  * <ul>
- *   <li>1行目：基本（必要タグ・見た目のスケール・飛ぶ生物かどうか）</li>
+ *   <li>1行目：基本（必要タグ・見た目のスケール・飛ぶ生物かどうか・素手/網での捕獲可否・敵対無効化）</li>
  *   <li>2行目：逃げやすさ・捕獲まわり（escape-chance・escape-despawns）</li>
  *   <li>3行目：近づくと逃げる（flee-from-players・flee-radius・flee-speed・movement-speed-multiplier）</li>
- *   <li>4行目：その他の動き・サイズ/レア度（disable-nectar・サイズイベント・size-rarity-template・base-rarity）</li>
+ *   <li>4行目：その他の動き・サイズ/レア度（disable-nectar・群れ行動・サイズイベント・size-rarity-template・base-rarity）</li>
  *   <li>5行目：アプローチ（寄ってくる釣り）関連の6項目</li>
  *   <li>6行目：操作（全解除・戻る）</li>
  * </ul>
@@ -48,6 +48,9 @@ public final class CreatureDetailGui implements InventoryHolder {
     public static final int SLOT_REQUIRED_TAGS = 0;
     public static final int SLOT_SCALE = 1;
     public static final int SLOT_FLYING = 2;
+    public static final int SLOT_ALLOW_BARE_HAND = 3;
+    public static final int SLOT_ALLOW_NET = 4;
+    public static final int SLOT_SUPPRESS_HOSTILITY = 5;
 
     // 2行目：逃げやすさ・捕獲
     public static final int SLOT_ESCAPE_CHANCE = 9;
@@ -64,6 +67,7 @@ public final class CreatureDetailGui implements InventoryHolder {
     public static final int SLOT_SIZE_DISTRIBUTION_TEMPLATE = 28;
     public static final int SLOT_SIZE_RARITY_TEMPLATE = 29;
     public static final int SLOT_BASE_RARITY = 30;
+    public static final int SLOT_SCHOOLING = 31;
 
     // 5行目：アプローチ（寄ってくる釣り）
     public static final int SLOT_APPROACH_PATIENCE = 36;
@@ -130,6 +134,10 @@ public final class CreatureDetailGui implements InventoryHolder {
                 "クリックしてチャットに数値を入力（例: 0.8）"));
 
         inventory.setItem(SLOT_FLYING, boolIcon("飛ぶ生物かどうか上書き（flying）", ov.flying()));
+        inventory.setItem(SLOT_ALLOW_BARE_HAND, boolIcon("素手で捕まえられるか上書き（allow-bare-hand）", ov.allowBareHand()));
+        inventory.setItem(SLOT_ALLOW_NET, boolIcon("虫取り網で捕まえられるか上書き（allow-net）", ov.allowNet()));
+        inventory.setItem(SLOT_SUPPRESS_HOSTILITY,
+                boolIcon("敵対AIを無効化するか上書き（suppress-hostility）", ov.suppressHostility()));
 
         inventory.setItem(SLOT_ESCAPE_CHANCE, valueIcon("基準の逃げやすさ上書き（escape-chance）",
                 ov.escapeChance() == null ? null : String.valueOf(ov.escapeChance()),
@@ -156,6 +164,7 @@ public final class CreatureDetailGui implements InventoryHolder {
                 "無し（生物本来: " + (creature == null || creature.sizeRarityTemplate() == null
                         ? "既定" : creature.sizeRarityTemplate()) + "）"));
         inventory.setItem(SLOT_BASE_RARITY, baseRarityIcon(creature, ov.baseRarityKey()));
+        inventory.setItem(SLOT_SCHOOLING, boolIcon("群れる上書き（schooling）", ov.schooling()));
 
         inventory.setItem(SLOT_APPROACH_PATIENCE, valueIcon("アプローチ：反応判定までの待ち時間上書き（patience-seconds）",
                 ao.patienceSeconds() == null ? null : String.valueOf(ao.patienceSeconds()),
@@ -178,7 +187,7 @@ public final class CreatureDetailGui implements InventoryHolder {
 
         inventory.setItem(SLOT_CLEAR_ALL, icon(Material.BARRIER,
                 Component.text("この枠の上書きを全て解除", NamedTextColor.RED),
-                List.of(gray("必要タグ・スケール・動き・レア度・"), gray("アプローチの上書きを、まとめて解除します。"))));
+                List.of(gray("必要タグ・スケール・動き・レア度・捕獲可否・"), gray("敵対無効化・アプローチの上書きを、まとめて解除します。"))));
         inventory.setItem(SLOT_BACK, icon(Material.ARROW,
                 Component.text("マーカー画面へ戻る", NamedTextColor.YELLOW), List.of()));
     }

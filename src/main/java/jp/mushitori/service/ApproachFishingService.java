@@ -52,9 +52,11 @@ import java.util.concurrent.ThreadLocalRandom;
  *
  * <p>動作の流れ：</p>
  * <ol>
- *   <li>釣竿をキャストした瞬間、浮きが水面に浮いていなければ何もしない。浮いていれば、
- *       浮きの近く（{@code notice-radius}、浮きを基準に探索）にいる対象個体を確認する。
- *       その場でいなくても諦めず、{@code retry-interval-seconds}おきに探し続ける
+ *   <li>釣竿をキャストした瞬間はまだ浮きが空中にあるため、{@code landing-wait-ticks}の間は
+ *       毎tick着水を確認する（それでも着水しなければ、以降は{@code retry-interval-seconds}
+ *       おきに確認し続ける）。着水を確認できたら、浮きの近く（{@code notice-radius}、
+ *       浮きを基準に探索）にいる対象個体を確認する。その場でいなくても諦めず、
+ *       {@code retry-interval-seconds}おきに探し続ける
  *       （後から範囲内に入ってきた個体も、次の巡回で見つかります）</li>
  *   <li>いた場合、{@code patience-seconds}だけ待つ（じっと糸を垂らし続ける）と、
  *       範囲内の対象個体それぞれが独立に{@code trigger-chance}で判定される
@@ -127,6 +129,7 @@ public final class ApproachFishingService {
     private int intervalTicks = 4;
     private double extraSizeBonus = 0.10;
     private double escapeCooldownSeconds = 20.0;
+    private int landingWaitTicks = 20;
     private EscapeMode escapeMode = EscapeMode.RELOCATE;
     private double relocateRadius = 9.0;
     private Sound windowStartSound = Sound.ENTITY_FISHING_BOBBER_SPLASH;
@@ -151,7 +154,9 @@ public final class ApproachFishingService {
         windowSeconds = Math.max(0.3, section.getDouble("window-seconds", 1.2));
         intervalTicks = Math.max(1, section.getInt("update-interval-ticks", 4));
         extraSizeBonus = Math.max(0.0, section.getDouble("extra-size-bonus", 0.10));
-        escapeCooldownSeconds = Math.max(0.0, section.getDouble("escape-cooldown-seconds", 20.0));        windowStartSound = parseSound(section.getString("sound-window-start"), Sound.ENTITY_FISHING_BOBBER_SPLASH);
+        escapeCooldownSeconds = Math.max(0.0, section.getDouble("escape-cooldown-seconds", 20.0));
+        landingWaitTicks = Math.max(1, section.getInt("landing-wait-ticks", 20));
+        windowStartSound = parseSound(section.getString("sound-window-start"), Sound.ENTITY_FISHING_BOBBER_SPLASH);
         catchSound = parseSound(section.getString("sound-catch"), Sound.ENTITY_EXPERIENCE_ORB_PICKUP);
 
         ConfigurationSection escape = section.getConfigurationSection("escape");
@@ -193,11 +198,47 @@ public final class ApproachFishingService {
         cancel(player); // 前回分の待機・誘導をリセット
 
         if (plugin.creatures().fishCreatures().isEmpty()) return;
-        if (!hook.isInWater()) {
-            log("浮きが水面に浮いていないため、寄ってくる釣りは働きません。");
+
+        if (hook.isInWater()) {
+            beginWaiting(player, hook, rodSizeBonus, rodEscapeModifier, rodTags);
             return;
         }
+        // キャストした直後は、浮きがまだ空中にあり isInWater() が必ずfalseになる
+        // （着水する前の1回だけの判定だと、事実上ずっと働かなくなってしまっていた不具合）。
+        // 着水するまで少し待ってから判定し直す。
+        waitForLanding(player, hook, rodSizeBonus, rodEscapeModifier, rodTags, 0);
+    }
 
+    /**
+     * 浮きが着水するまで待ってから、通常の待機フロー（{@link #beginWaiting}）へ合流する。
+     *
+     * <p>最初の{@code landingWaitTicks}の間は毎tick判定し（通常のキャストなら数tickで着水する）、
+     * それでも着水していなければ、あきらめて失敗として終えるのではなく、以降は
+     * {@code retryIntervalSeconds}おきに判定し続ける（陸に引っかかった浮きが後で水に
+     * 落ち着く、といったケースでも取りこぼさないようにするため）。</p>
+     */
+    private void waitForLanding(Player player, FishHook hook, double rodSizeBonus, double rodEscapeModifier,
+                                Set<String> rodTags, int elapsedTicks) {
+        UUID playerId = player.getUniqueId();
+        long delay = elapsedTicks < landingWaitTicks ? 1L : Math.max(1L, Math.round(retryIntervalSeconds * 20.0));
+
+        ScheduledTask task = hook.getScheduler().runDelayed(plugin, t -> {
+            if (!hook.isValid() || !player.isOnline()) {
+                waitingTasks.remove(playerId);
+                return;
+            }
+            if (hook.isInWater()) {
+                beginWaiting(player, hook, rodSizeBonus, rodEscapeModifier, rodTags);
+                return;
+            }
+            waitForLanding(player, hook, rodSizeBonus, rodEscapeModifier, rodTags, elapsedTicks + (int) delay);
+        }, null, delay);
+        waitingTasks.put(playerId, task);
+    }
+
+    /** 浮きが水中にあることを確認した後の、通常の待機フロー（近くの対象個体を探し始める）。 */
+    private void beginWaiting(Player player, FishHook hook, double rodSizeBonus, double rodEscapeModifier,
+                              Set<String> rodTags) {
         List<Entity> nearby = findNearbyFishes(hook, rodTags);
         // 最初に見つからなくても、ここでは諦めない（一定間隔ごとに探し続ける。下のタスクを参照）。
         // 待ち時間（patience/retry）は、見つかっていれば一番近い個体の設定を、

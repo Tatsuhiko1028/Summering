@@ -47,7 +47,8 @@ public final class GearRegistry {
 
     public record Gear(String id, String name, List<String> description, Material material,
                        @Nullable Integer customModelData, double escapeModifier, double sizeBonus,
-                       int price, int durability, @Nullable Double range, Set<String> tags) {
+                       int price, int durability, @Nullable Double range, Set<String> tags,
+                       boolean bypassCatchRestriction) {
         /** 耐久値の設定があるか（0以下は無限耐久扱い）。 */
         public boolean hasDurability() {
             return durability > 0;
@@ -114,7 +115,8 @@ public final class GearRegistry {
                     s.getInt("price", 0),
                     s.getInt("durability", 0),
                     net && s.contains("range") ? s.getDouble("range") : null,
-                    new LinkedHashSet<>(s.getStringList("tags"))));
+                    new LinkedHashSet<>(s.getStringList("tags")),
+                    net && s.getBoolean("bypass-catch-restriction", false)));
         }
     }
 
@@ -215,6 +217,9 @@ public final class GearRegistry {
             if (!gear.tags().isEmpty()) {
                 pdc.set(Keys.GEAR_TAGS, PersistentDataType.STRING, String.join(",", gear.tags()));
             }
+            if (gear.bypassCatchRestriction()) {
+                pdc.set(Keys.GEAR_BYPASS_CATCH_RESTRICTION, PersistentDataType.BYTE, (byte) 1);
+            }
         });
         return item;
     }
@@ -244,6 +249,14 @@ public final class GearRegistry {
         String raw = item.getItemMeta().getPersistentDataContainer().get(Keys.GEAR_TAGS, PersistentDataType.STRING);
         if (raw == null || raw.isBlank()) return Set.of();
         return new LinkedHashSet<>(List.of(raw.split(",")));
+    }
+
+    /** その網が、allow-net=falseの生物（魚など）の捕獲可否制限を無視できる（デバッグ用）か。 */
+    public boolean bypassesCatchRestriction(@Nullable ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        Byte raw = item.getItemMeta().getPersistentDataContainer()
+                .get(Keys.GEAR_BYPASS_CATCH_RESTRICTION, PersistentDataType.BYTE);
+        return raw != null && raw != 0;
     }
 
     private double readDouble(@Nullable ItemStack item, NamespacedKey key, double fallback) {

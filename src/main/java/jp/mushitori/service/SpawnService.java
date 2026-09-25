@@ -168,6 +168,14 @@ public final class SpawnService {
             Bukkit.getMobGoals().addGoal(mob, 1,
                     new FleeFromPlayersGoal(mob, behavior.fleeRadius(), behavior.fleeSpeed()));
         }
+
+        if (behavior.schooling() && spawned instanceof Mob schoolMob) {
+            // 優先度はFlee(1)・MovementSpeed(2)の次。同じ生物にmovement-speed-multiplierも
+            // 設定されている場合、PaperのGoalType.MOVEは同時に1つしか動かないため、
+            // 群れ行動が実際には発動しないことがある（既知の制限）。
+            Bukkit.getMobGoals().addGoal(schoolMob, 3,
+                    new SchoolingGoal(schoolMob, behavior.schoolingRadius(), behavior.schoolingSpeed()));
+        }
     }
 
     /** 既存の "hidename" チームがあれば、そこへ参加させる（無ければ何もしない）。 */
