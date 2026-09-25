@@ -161,7 +161,9 @@ public final class MarkerGui implements InventoryHolder {
                 ? "無し（既定）" : wc.sizeDistributionTemplate();
         String approachInfo = wc.approachOverride().equals(ApproachOverrides.EMPTY)
                 ? "無し" : "あり（シフト+左クリックで確認）";
-        return icon(creatureSlotMaterial(), creatureSlotCustomModelData(),
+        Material material = c != null ? c.material() : Material.RABBIT_HIDE;
+        Integer customModelData = c != null ? c.customModelData() : null;
+        return icon(material, customModelData,
                 Component.text(name + "  (重み " + wc.weight() + " ≒ " + percent + ")", NamedTextColor.AQUA),
                 List.of(gray("ID: " + wc.creatureId()),
                         gray("必要タグの上書き: " + tagInfo),
@@ -172,20 +174,6 @@ public final class MarkerGui implements InventoryHolder {
                         gray("右クリック: ウェイト -1"),
                         gray("シフト+右クリック: ウェイト +1"),
                         gray("シフト+左クリック: 詳細設定を開く")));
-    }
-
-    /** 生物枠アイコンの素材。config.yml の ambient-spawn.creature-slot-material（既定RABBIT_HIDE）。 */
-    private Material creatureSlotMaterial() {
-        String raw = plugin.getConfig().getString("ambient-spawn.creature-slot-material", "RABBIT_HIDE");
-        Material m = Material.matchMaterial(raw == null ? "" : raw);
-        return m == null ? Material.RABBIT_HIDE : m;
-    }
-
-    /** 生物枠アイコンのcustom-model-data。config.yml の ambient-spawn.creature-slot-custom-model-data（任意）。 */
-    @Nullable
-    private Integer creatureSlotCustomModelData() {
-        return plugin.getConfig().contains("ambient-spawn.creature-slot-custom-model-data")
-                ? plugin.getConfig().getInt("ambient-spawn.creature-slot-custom-model-data") : null;
     }
 
     private ItemStack stepper(Material material, String label, double value, String description) {

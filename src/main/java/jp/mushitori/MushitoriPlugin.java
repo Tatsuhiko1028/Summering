@@ -9,6 +9,7 @@ import jp.mushitori.listener.PlayerDataListener;
 import jp.mushitori.listener.CageListener;
 import jp.mushitori.listener.PurseListener;
 import jp.mushitori.listener.BareHandCatchListener;
+import jp.mushitori.listener.HostileSuppressionListener;
 import jp.mushitori.listener.MarkerGuiListener;
 import jp.mushitori.listener.PlayerGiveListener;
 import jp.mushitori.listener.SavingsGuiListener;
@@ -131,6 +132,7 @@ public final class MushitoriPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new MarkerWandListener(this), this);
         getServer().getPluginManager().registerEvents(new MarkerGuiListener(this), this);
         getServer().getPluginManager().registerEvents(new TraderListener(this), this);
+        getServer().getPluginManager().registerEvents(new HostileSuppressionListener(this), this);
         getServer().getPluginManager().registerEvents(showcaseListener, this);
         getServer().getPluginManager().registerEvents(playerGiveListener, this);
 

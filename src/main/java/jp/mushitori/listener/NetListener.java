@@ -41,8 +41,13 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p><b>タグ</b>：生物側に{@code required-tags}が設定されている場合、網側に焼き付けられた
  * タグが全て揃っていないと、その生物は最初から対象になりません（捕まえられも
- * 逃げられもせず、素通りします）。同様に、FISHカテゴリの生物も、網ではそもそも
- * 対象になりません（釣竿限定です）。</p>
+ * 逃げられもせず、素通りします）。</p>
+ *
+ * <p><b>網で捕まえられるか</b>：{@code creature.allowNet()}（マーカーの生物枠ごとの
+ * 上書きも含む）がfalseの生物は、網が届かないと分かった時点で逃げます（省略時は
+ * FISHならfalse＝釣竿限定、BUGならtrue）。ただし、nets.yml側で
+ * {@code bypass-catch-restriction: true}が付いた網（デバッグ用）は、この制限を無視して
+ * 捕まえられます。</p>
  *
  * <p><b>耐久値</b>：振った回数ではなく、実際に「捕まえた（＋逃げられた）」回数ぶん
  * 減ります。何もいない場所へ振っても、何かに当たってすべて対象外だった場合も、
@@ -131,7 +136,19 @@ public final class NetListener implements Listener {
             if (creatureId == null) continue;
             Creature creature = plugin.creatures().get(creatureId);
             if (creature == null) continue;
-            if (creature.category().isFish()) continue; // 魚は網では捕まえられない（釣竿限定）
+            if (!plugin.ambientSpawnService().effectiveAllowNet(target, creature)
+                    && !plugin.gear().bypassesCatchRestriction(net)) {
+                // 以前は無反応（素通り）で終わっていたが、他の逃走演出と挙動を揃えるため、
+                // この網では届かないと分かった時点で逃げて（テレポートして）もらう。
+                // デバッグ用のbypass-catch-restriction付きの網は、この制限を無視できる。
+                if (plugin.ambientSpawnService().effectiveEscapeDespawns(target, creature)) {
+                    EscapeEffects.puff(target.getLocation(), plugin.netEscapeSound());
+                    target.remove();
+                } else {
+                    EscapeEffects.escapeNearby(plugin, target, plugin.netEscapeTeleportRadius(), plugin.netEscapeSound());
+                }
+                continue;
+            }
             // マーカーの生物枠に専用タグの上書きがあればそちらを、無ければcreature本来の
             // required-tagsを使う（AmbientSpawnService#effectiveRequiredTags）
             var effectiveTags = plugin.ambientSpawnService().effectiveRequiredTags(target, creature);

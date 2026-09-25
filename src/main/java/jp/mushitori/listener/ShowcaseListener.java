@@ -59,19 +59,27 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * そのまま連続で右クリックして次々と表示できます（1人あたり最大
  * {@link #MAX_PER_PLAYER}体まで。それ以上は表示できません）。</p>
  *
- * <p>表示位置：正面に地面や壁がある場合はその手前に、何もない（空中を見ている）
- * 場合は、体の向き（yaw）だけを使った水平方向・指定距離の位置に表示します
- * （見上げ／見下ろしすぎて真上・真下を向いていても、破綻しないようにするため）。
- * ただし、見上げている場合は、pitchの角度をそのまま反映すると高く出過ぎてしまう
- * ため、角度に比例させず「見上げていれば固定で少し（既定1ブロック）底上げする」
- * だけに留めています。向きは、表示したプレイヤー自身ではなく、プレイヤーが
- * 見ていたのと同じ方向（＝プレイヤーに背を向ける形）にしています。</p>
+ * <p>表示位置：<b>カーソル（視線）が実際に地面を選択しているとき</b>（下を向いていて、
+ * かつその先に何かブロックがヒットしたとき）だけ、その手前に地面設置として表示します。
+ * 見上げている・水平を見ている場合はもちろん、少し下を向いていてもカーソルの先が
+ * 何にも届いていなければ（壁・天井へのヒットを含む）、空中表示に回します。空中表示は、
+ * 体の向き（yaw）だけを使った水平方向・指定距離の位置にする（見上げ／見下ろしすぎて
+ * 真上・真下を向いていても、破綻しないようにするため）。ただし見上げている場合は、
+ * pitchの角度をそのまま反映すると高く出過ぎてしまうため、角度に比例させず
+ * 「見上げていれば固定で少し（既定1ブロック）底上げする」だけに留めています。
+ * 向きは、表示したプレイヤー自身ではなく、プレイヤーが見ていたのと同じ方向
+ * （＝プレイヤーに背を向ける形）にしています。</p>
  *
  * <p>表示中のいきものは、虫取り網で捕まえられたり、攻撃で倒されたりすることは
  * ありません（{@link Keys#CREATURE_ID} タグを付けず、通常の捕獲対象の判定から
  * そもそも外れるようにしています。念のため無敵化・AI無効化もしています）。
- * 表示した個体それぞれから一定距離（既定2ブロック）以上離れると、その表示だけが
+ * 表示した個体それぞれから一定距離（既定6ブロック）以上離れると、その表示だけが
  * 消えます（他の表示には影響しません）。</p>
+ *
+ * <p>サーバー全体（誰の表示かを問わず）で、既存の表示に近すぎる位置には重ねて
+ * 表示できません（既定0.3ブロック未満）。また、同じ個体（生物ID・実測cm・捕獲日時・
+ * 捕獲者が一致する、同一の捕獲イベント）は、サーバー全体で同時に1つまでしか
+ * 表示できません。</p>
  *
  * <p>表示するエンティティには、生物名をカスタムネームとして設定しています
  * （表示自体は{@code setCustomNameVisible(false)}で隠していますが、名前を基準に
@@ -86,7 +94,7 @@ public final class ShowcaseListener implements Listener {
     private long holdMs = 1000L;
     /** 目の前、何もない場合にどれだけ離れた位置に表示するか（ブロック）。 */
     private double distance = 1.5;
-    /** 正面に地面・壁が無いか探す距離（ブロック）。基本は distance と同じでよい。 */
+    /** 下を向いているとき、正面（視線の先）に地面が無いか探す距離（ブロック）。基本は distance と同じでよい。 */
     private double wallCheckDistance = 1.5;
     /** 壁・地面の手前に表示するときの、壁面からの余白（ブロック）。 */
     private static final double WALL_MARGIN = 0.3;
@@ -95,9 +103,11 @@ public final class ShowcaseListener implements Listener {
     /** これより上（pitchがこれより小さい＝見上げている）なら、底上げを適用する（バニラのpitchは上が負）。 */
     private static final double LOOK_UP_PITCH_THRESHOLD = -10.0;
     /** 表示した個体から、これ以上離れたら消す（ブロック）。 */
-    private double despawnDistance = 2.0;
+    private double despawnDistance = 6.0;
     /** 誰も動かなくても、これだけ経てば自動的に消す（tick）。 */
     private long maxDurationTicks = 20L * 30;
+    /** 他の表示（サーバー全体、誰のものでも）から、これより近い位置には重ねて置けない（ブロック）。 */
+    private double overlapMinDistance = 0.3;
 
     private final MushitoriPlugin plugin;
     private final Map<UUID, Long> sneakStartedAt = new ConcurrentHashMap<>();
@@ -108,11 +118,14 @@ public final class ShowcaseListener implements Listener {
     private static final class ShowcaseInstance {
         final Entity main;
         final List<Entity> parts;
+        /** 「同じ個体」判定用の識別子（生物ID・実測cm・捕獲日時・捕獲者から組み立てる）。 */
+        final String individualKey;
         @Nullable ScheduledTask expireTask;
 
-        ShowcaseInstance(Entity main, List<Entity> parts) {
+        ShowcaseInstance(Entity main, List<Entity> parts, String individualKey) {
             this.main = main;
             this.parts = parts;
+            this.individualKey = individualKey;
         }
 
         void removeAll() {
@@ -133,8 +146,9 @@ public final class ShowcaseListener implements Listener {
         distance = section.getDouble("distance", 1.5);
         wallCheckDistance = section.getDouble("wall-check-distance", distance);
         lookUpLift = section.getDouble("look-up-lift", 1.0);
-        despawnDistance = section.getDouble("despawn-distance", 2.0);
+        despawnDistance = section.getDouble("despawn-distance", 6.0);
         maxDurationTicks = Math.round(section.getDouble("max-duration-seconds", 30.0) * 20.0);
+        overlapMinDistance = Math.max(0.0, section.getDouble("overlap-min-distance", 0.3));
     }
 
     @EventHandler
@@ -186,7 +200,7 @@ public final class ShowcaseListener implements Listener {
         List<ShowcaseInstance> list = active.computeIfAbsent(uuid, k -> new CopyOnWriteArrayList<>());
         if (list.size() >= MAX_PER_PLAYER) {
             player.sendActionBar(Component.text(
-                    "これ以上は自慢できません（上限" + MAX_PER_PLAYER + "体）。", NamedTextColor.RED));
+                    "これ以上は出せません（上限" + MAX_PER_PLAYER + "体）。", NamedTextColor.RED));
             return;
         }
 
@@ -205,16 +219,20 @@ public final class ShowcaseListener implements Listener {
         Location spawnAt;
         Vector faceDirection;
 
-        // まず、正面に地面・壁がすぐ近くにあるかを見る（pitch込みの本当の視線で判定）
+        // 地面への設置は、実際にカーソル（視線）が地面を選択しているときだけに限る。
+        // 見上げている・水平を見ている場合はもちろん、少し下を向いていてもカーソルの先が
+        // 地面まで届いていなければ（何もヒットしなければ）、空中表示にする（壁や天井への
+        // ヒットも、下向きに見ていない限りは同様に空中表示扱いにする）。
         Vector lookDir = eye.getDirection();
-        RayTraceResult hit = world.rayTraceBlocks(eye, lookDir, wallCheckDistance);
+        boolean lookingDown = eye.getPitch() > 0; // バニラのpitchは、下を向くほど正の値になる
+        RayTraceResult hit = lookingDown ? world.rayTraceBlocks(eye, lookDir, wallCheckDistance) : null;
         if (hit != null && hit.getHitPosition() != null) {
             double hitDist = eye.toVector().distance(hit.getHitPosition());
             double placeDist = Math.max(0.2, hitDist - WALL_MARGIN);
             spawnAt = eye.clone().add(lookDir.clone().multiply(placeDist));
             faceDirection = lookDir;
         } else {
-            // 何も無い（空中を見ている）場合：見上げ・見下ろしすぎて破綻しないよう、
+            // 地面を選択していない（空中を見ている）場合：見上げ・見下ろしすぎて破綻しないよう、
             // 体の向き（yaw）だけを使った、水平方向・指定距離の位置にする。
             // 見上げている場合だけ、角度には比例させず固定で少し底上げする
             // （pitchをそのまま反映すると、急な角度のときに高く出過ぎてしまうため）。
@@ -230,6 +248,16 @@ public final class ShowcaseListener implements Listener {
         // 向きは、表示したプレイヤー自身ではなく、プレイヤーが見ていたのと同じ方向にする
         // （＝プレイヤーに背を向ける形。「自慢」なので、自分ではなく向こう側を見せる）
         spawnAt.setDirection(faceDirection);
+
+        String individualKey = individualKey(data);
+        if (isAlreadyShown(individualKey)) {
+            player.sendActionBar(Component.text("この個体はすでにどこかに出ています。", NamedTextColor.RED));
+            return;
+        }
+        if (isTooCloseToOther(spawnAt)) {
+            player.sendActionBar(Component.text("近くに他のいきものが出ているため、ここには置けません。", NamedTextColor.RED));
+            return;
+        }
 
         Entity entity = world.spawnEntity(spawnAt, type, CreatureSpawnEvent.SpawnReason.CUSTOM,
                 spawned -> {
@@ -255,7 +283,7 @@ public final class ShowcaseListener implements Listener {
         parts.add(entity);
         parts.addAll(spawnLabels(world, entity, creature, data));
 
-        ShowcaseInstance instance = new ShowcaseInstance(entity, parts);
+        ShowcaseInstance instance = new ShowcaseInstance(entity, parts, individualKey);
         active.computeIfAbsent(player.getUniqueId(), k -> new CopyOnWriteArrayList<>()).add(instance);
 
         world.spawnParticle(Particle.TOTEM_OF_UNDYING, spawnAt, 20, 0.3, 0.3, 0.3, 0.2);
@@ -324,6 +352,40 @@ public final class ShowcaseListener implements Listener {
                     new Vector3f(scale, scale, scale),
                     new AxisAngle4f(0f, 0f, 0f, 1f)));
         });
+    }
+
+    /**
+     * 「同じ個体」判定用の識別子。生物ID・実測cm・捕獲日時・捕獲者の組み合わせは、
+     * 同一の捕獲イベントでなければ一致しないため、実質的にその1匹だけを指す識別子になる。
+     */
+    private static String individualKey(CatchData data) {
+        return data.creatureId() + "|" + data.sizeCm() + "|" + data.caughtAt() + "|" + data.catcherUuid();
+    }
+
+    /** その個体が、サーバー全体（誰の表示であっても）で既に表示中かどうか。 */
+    private boolean isAlreadyShown(String individualKey) {
+        for (List<ShowcaseInstance> list : active.values()) {
+            for (ShowcaseInstance instance : list) {
+                if (instance.individualKey.equals(individualKey)) return true;
+            }
+        }
+        return false;
+    }
+
+    /** その位置が、サーバー全体（誰の表示であっても）の既存の表示に近すぎないか。 */
+    private boolean isTooCloseToOther(Location spawnAt) {
+        World world = spawnAt.getWorld();
+        if (world == null) return false;
+        double min2 = overlapMinDistance * overlapMinDistance;
+        for (List<ShowcaseInstance> list : active.values()) {
+            for (ShowcaseInstance instance : list) {
+                if (!instance.main.isValid()) continue;
+                Location loc = instance.main.getLocation();
+                if (!world.equals(loc.getWorld())) continue;
+                if (loc.distanceSquared(spawnAt) < min2) return true;
+            }
+        }
+        return false;
     }
 
     private boolean isTopRarity(String rarityKey) {

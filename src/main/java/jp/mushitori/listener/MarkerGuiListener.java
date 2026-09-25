@@ -314,6 +314,34 @@ public final class MarkerGuiListener implements Listener {
                 plugin.ambientSpawnService().updateMarker(withCreatures(marker, list));
                 detailGui.redraw(updated);
             }
+            case CreatureDetailGui.SLOT_ALLOW_BARE_HAND -> {
+                WeightedCreature updated = current.withOverride(
+                        current.override().withAllowBareHand(cycleBoolean(current.override().allowBareHand())));
+                list.set(index, updated);
+                plugin.ambientSpawnService().updateMarker(withCreatures(marker, list));
+                detailGui.redraw(updated);
+            }
+            case CreatureDetailGui.SLOT_ALLOW_NET -> {
+                WeightedCreature updated = current.withOverride(
+                        current.override().withAllowNet(cycleBoolean(current.override().allowNet())));
+                list.set(index, updated);
+                plugin.ambientSpawnService().updateMarker(withCreatures(marker, list));
+                detailGui.redraw(updated);
+            }
+            case CreatureDetailGui.SLOT_SUPPRESS_HOSTILITY -> {
+                WeightedCreature updated = current.withOverride(
+                        current.override().withSuppressHostility(cycleBoolean(current.override().suppressHostility())));
+                list.set(index, updated);
+                plugin.ambientSpawnService().updateMarker(withCreatures(marker, list));
+                detailGui.redraw(updated);
+            }
+            case CreatureDetailGui.SLOT_SCHOOLING -> {
+                WeightedCreature updated = current.withOverride(
+                        current.override().withSchooling(cycleBoolean(current.override().schooling())));
+                list.set(index, updated);
+                plugin.ambientSpawnService().updateMarker(withCreatures(marker, list));
+                detailGui.redraw(updated);
+            }
             case CreatureDetailGui.SLOT_FLEE_FROM_PLAYERS -> {
                 WeightedCreature updated = current.withOverride(
                         current.override().withFleeFromPlayers(cycleBoolean(current.override().fleeFromPlayers())));

@@ -50,6 +50,16 @@
 #  flying : （任意）空を飛ぶ生物かどうか。省略時は entity が BEE なら true、それ以外は
 #              false になります。素手で捕まえようとしたとき、飛ぶ生物はさらに
 #              捕まえにくくなります（詳しくは BareHandCatchListener を参照）。
+#  suppress-hostility : （任意・既定false）entity にシルバーフィッシュ等の敵対モブを
+#              使っている場合、バニラの敵対AI（プレイヤーへの攻撃）を無効化するか。
+#              マーカーの生物枠ごとにも上書きできます。
+#  allow-bare-hand : （任意）素手で捕まえられるか。省略時は BUG なら true、
+#              FISH なら false（今までどおり、魚は素手では捕まえられません）。
+#              falseの生物を素手で捕まえようとすると、逃げられます（テレポート）。
+#  allow-net : （任意）虫取り網で捕まえられるか。省略時は BUG なら true、
+#              FISH なら false（今までどおり、魚は網では捕まえられません）。
+#              nets.yml側で bypass-catch-restriction: true が付いた網（デバッグ用）は
+#              この設定に関わらず捕まえられます。
 #  tropical-fish : （任意・entity: TROPICAL_FISH のときだけ有効）模様・体色・模様色の指定。
 #              pattern, body-color, pattern-color を省略した項目はバニラのランダムのまま。
 #  base-scale : （任意）見た目のスケールの基準値（既定1.0）。実測サイズと平均サイズの比に
@@ -72,6 +82,11 @@
 #                                   （既定の動き）のではなく、その場で完全に消えるようにするか。
 #                                   trueにすると、いったん逃がすと同じ個体はもう追えません
 #                                   （マーカーからまた新しく湧くのを待つ形になります）。
+#      schooling                 : （既定false）近くにいる、同じ生物ID（creature_id。バニラの
+#                                   entity種別ではなく、このyamlのキー基準）の個体どうしで
+#                                   寄り集まる動きを追加するか（例: 魚の群れ）。
+#      schooling-radius          : （既定8.0）仲間を探す範囲（ブロック）。
+#      schooling-speed           : （既定1.0）群れの中心へ向かう速度（バニラのMob移動速度に対する倍率）。
 #      例（うさぎのようにジャンプで動く生物にしたい場合）：entity: RABBIT を指定すれば、
 #      バニラのうさぎ自体が元々ジャンプで移動するため、behavior側で特別な設定は不要です。
 #      SLIME等、ジャンプ移動を持つ他のentityでも同様です。
@@ -141,6 +156,8 @@ creatures:
       material: PAPER
       custom-model-data: 10003
     entity: SILVERFISH
+    # SILVERFISHはバニラだと敵対（プレイヤーを攻撃する）ため、無効化しておく
+    suppress-hostility: true
     # カブトムシはそこそこ逃げにくい
     escape-chance: 0.25
     # ベースは「めずらしい」。最も〜のサイズになると、defaultテンプレートの
@@ -161,6 +178,8 @@ creatures:
       material: PAPER
       custom-model-data: 10004
     entity: SILVERFISH
+    # SILVERFISHはバニラだと敵対（プレイヤーを攻撃する）ため、無効化しておく
+    suppress-hostility: true
     # カナブンはほとんど逃げない（初心者の最初の一匹になりやすい）
     escape-chance: 0.08
     base-rarity: N
@@ -208,6 +227,9 @@ creatures:
     escape-chance: 0.1
     base-rarity: N
     base-scale: 1.0
+    # 群れで泳ぐ魚なので、近くの同じアジどうしで寄り集まるようにする
+    behavior:
+      schooling: true
     # 数が多い魚なので、寄ってくる釣りでも比較的当たりやすくしてある
     approach:
       patience-seconds: 8.0

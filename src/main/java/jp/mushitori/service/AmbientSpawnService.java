@@ -77,6 +77,7 @@ public final class AmbientSpawnService {
     private double leashWalkSpeed = 1.0;
     private int defaultMaxCount = 1;
     private int defaultSimultaneousMax = 1;
+    private int fishSpawnMaxDepthBlocks = 24;
     private boolean debug = false;
 
     public AmbientSpawnService(MushitoriPlugin plugin) {
@@ -96,6 +97,7 @@ public final class AmbientSpawnService {
         leashWalkSpeed = Math.max(0.1, section.getDouble("leash-walk-speed", 1.0));
         defaultMaxCount = Math.max(1, section.getInt("max-count", 1));
         defaultSimultaneousMax = Math.max(1, section.getInt("simultaneous-max", 1));
+        fishSpawnMaxDepthBlocks = Math.max(1, section.getInt("fish-spawn-max-depth", 24));
         debug = section.getBoolean("debug", false);
 
         ConfigurationSection presetsSection = section.getConfigurationSection("presets");
@@ -189,6 +191,10 @@ public final class AmbientSpawnService {
         if (ov.disableNectar() != null) m.put("disable-nectar", ov.disableNectar());
         if (ov.sizeRarityTemplate() != null) m.put("size-rarity-template", ov.sizeRarityTemplate());
         if (ov.baseRarityKey() != null) m.put("base-rarity", ov.baseRarityKey());
+        if (ov.suppressHostility() != null) m.put("suppress-hostility", ov.suppressHostility());
+        if (ov.allowBareHand() != null) m.put("allow-bare-hand", ov.allowBareHand());
+        if (ov.allowNet() != null) m.put("allow-net", ov.allowNet());
+        if (ov.schooling() != null) m.put("schooling", ov.schooling());
         return m;
     }
 
@@ -205,7 +211,11 @@ public final class AmbientSpawnService {
                 getBooleanOrNull(map, "escape-despawns"),
                 getBooleanOrNull(map, "disable-nectar"),
                 getStringOrNull(map, "size-rarity-template"),
-                getStringOrNull(map, "base-rarity"));
+                getStringOrNull(map, "base-rarity"),
+                getBooleanOrNull(map, "suppress-hostility"),
+                getBooleanOrNull(map, "allow-bare-hand"),
+                getBooleanOrNull(map, "allow-net"),
+                getBooleanOrNull(map, "schooling"));
     }
 
     private Map<String, Object> writeApproachOverride(ApproachOverrides ao) {
@@ -488,6 +498,24 @@ public final class AmbientSpawnService {
     public boolean effectiveEscapeDespawns(Entity entity, Creature creature) {
         Byte raw = entity.getPersistentDataContainer().get(Keys.ESCAPE_DESPAWNS_OVERRIDE, PersistentDataType.BYTE);
         return raw != null ? raw != 0 : creature.behavior().escapeDespawns();
+    }
+
+    /** そのエンティティに実際に適用される「バニラの敵対AIを無効化するか」。マーカーの上書きがあればそちら。 */
+    public boolean effectiveSuppressHostility(Entity entity, Creature creature) {
+        Byte raw = entity.getPersistentDataContainer().get(Keys.SUPPRESS_HOSTILITY_OVERRIDE, PersistentDataType.BYTE);
+        return raw != null ? raw != 0 : creature.suppressHostility();
+    }
+
+    /** そのエンティティに実際に適用される「素手で捕まえられるか」。マーカーの上書きがあればそちら。 */
+    public boolean effectiveAllowBareHand(Entity entity, Creature creature) {
+        Byte raw = entity.getPersistentDataContainer().get(Keys.ALLOW_BARE_HAND_OVERRIDE, PersistentDataType.BYTE);
+        return raw != null ? raw != 0 : creature.allowBareHand();
+    }
+
+    /** そのエンティティに実際に適用される「虫取り網で捕まえられるか」。マーカーの上書きがあればそちら。 */
+    public boolean effectiveAllowNet(Entity entity, Creature creature) {
+        Byte raw = entity.getPersistentDataContainer().get(Keys.ALLOW_NET_OVERRIDE, PersistentDataType.BYTE);
+        return raw != null ? raw != 0 : creature.allowNet();
     }
 
     /**
@@ -804,7 +832,7 @@ public final class AmbientSpawnService {
                 continue;
             }
 
-            Location spawnAt = findSafeSpawnPoint(loc, marker.spawnRadius());
+            Location spawnAt = findSafeSpawnPoint(loc, marker.spawnRadius(), creature.category().isFish());
             if (spawnAt == null) {
                 log(marker, "範囲内に安全な地面・水面が見つからなかったため、この枠は見送ります。");
                 continue;
@@ -830,6 +858,18 @@ public final class AmbientSpawnService {
             if (ov.escapeDespawns() != null) {
                 spawned.getPersistentDataContainer().set(Keys.ESCAPE_DESPAWNS_OVERRIDE, PersistentDataType.BYTE,
                         (byte) (ov.escapeDespawns() ? 1 : 0));
+            }
+            if (ov.suppressHostility() != null) {
+                spawned.getPersistentDataContainer().set(Keys.SUPPRESS_HOSTILITY_OVERRIDE, PersistentDataType.BYTE,
+                        (byte) (ov.suppressHostility() ? 1 : 0));
+            }
+            if (ov.allowBareHand() != null) {
+                spawned.getPersistentDataContainer().set(Keys.ALLOW_BARE_HAND_OVERRIDE, PersistentDataType.BYTE,
+                        (byte) (ov.allowBareHand() ? 1 : 0));
+            }
+            if (ov.allowNet() != null) {
+                spawned.getPersistentDataContainer().set(Keys.ALLOW_NET_OVERRIDE, PersistentDataType.BYTE,
+                        (byte) (ov.allowNet() ? 1 : 0));
             }
             if (!picked.approachOverride().equals(ApproachOverrides.EMPTY)) {
                 spawned.getPersistentDataContainer().set(Keys.APPROACH_OVERRIDE, PersistentDataType.STRING,
@@ -875,9 +915,13 @@ public final class AmbientSpawnService {
             double dz = mobLoc.getZ() - center.getZ();
             if (dx * dx + dz * dz <= leash2) continue;
 
+            String creatureId = plugin.spawnService().creatureIdOf(mob);
+            Creature creature = creatureId == null ? null : plugin.creatures().get(creatureId);
+            boolean fish = creature != null && creature.category().isFish();
+
             // 範囲内のランダムな地点（地面・水面を考慮して安全な高さを探したもの）へ、
             // テレポートではなく歩いて戻らせる
-            Location back = findSafeSpawnPoint(center, radius * 0.5);
+            Location back = findSafeSpawnPoint(center, radius * 0.5, fish);
             if (back == null) {
                 // 安全な地点が見つからなければ、保険として個体の現在の高さのまま戻す
                 back = randomPointAround(center, radius * 0.5);
@@ -906,35 +950,58 @@ public final class AmbientSpawnService {
      *  浮島の端では空中・void上に湧いてしまい、下へ落ち続けて地面に埋まったように
      *  見える不具合があった。X/Zはランダムに決めつつ、Yはマーカー付近を上下に探索し、
      *  実際に乗れる地面／浸れる水面を見つけてから、その上に湧かせるようにする。
-     *  何回試しても見つからなければ null（今回は湧かせない）。 */
+     *  何回試しても見つからなければ null（今回は湧かせない）。
+     *
+     *  @param fish 魚（{@link jp.mushitori.model.Category#isFish()}）かどうか。
+     *              trueの場合、見つかった水塊の中でランダムな深さに浮かせる
+     *              （falseだと常に水面直下＝一番上に固定されてしまっていた不具合があった）。
+     */
     @Nullable
-    private Location findSafeSpawnPoint(Location center, double radius) {
+    private Location findSafeSpawnPoint(Location center, double radius, boolean fish) {
         World world = center.getWorld();
         if (world == null) return null;
 
         for (int attempt = 0; attempt < 6; attempt++) {
             Location candidate = randomPointAround(center, radius);
-            Location grounded = groundedAt(world, candidate.getX(), candidate.getZ(), center.getY());
+            Location grounded = groundedAt(world, candidate.getX(), candidate.getZ(), center.getY(), fish);
             if (grounded != null) return grounded;
         }
         // 何回か試して見つからなければ、マーカーの中心そのもの（元々設置された場所）を最後の保険にする
-        return groundedAt(world, center.getX(), center.getZ(), center.getY());
+        return groundedAt(world, center.getX(), center.getZ(), center.getY(), fish);
     }
 
-    /** 指定したX/Z付近を、基準Yから上下に探索し、乗れる地面／浸れる水面のすぐ上を返す。見つからなければ null。 */
+    /**
+     * 指定したX/Z付近を、基準Yから上下に探索し、乗れる地面／浸れる水面のすぐ上を返す。見つからなければ null。
+     *
+     * <p>魚（{@code fish == true}）の場合は、見つかった水面ブロックからさらに下へ、水が連続している
+     * 範囲（水塊）の下端まで探索し、その範囲内のランダムな深さを返す（常に水面最上部に固定されて
+     * しまっていた不具合の修正）。非魚は従来通り、見つかった水面のすぐ下に置く。</p>
+     */
     @Nullable
-    private Location groundedAt(World world, double x, double z, double baseY) {
+    private Location groundedAt(World world, double x, double z, double baseY, boolean fish) {
         int bx = (int) Math.floor(x);
         int bz = (int) Math.floor(z);
         int base = (int) Math.round(baseY);
         int top = Math.min(world.getMaxHeight() - 1, base + 6);
-        int bottom = Math.max(world.getMinHeight(), base - 10);
+        int bottom = Math.max(world.getMinHeight(), base - (fish ? fishSpawnMaxDepthBlocks : 10));
 
         for (int y = top; y >= bottom; y--) {
             Material type = world.getBlockAt(bx, y, bz).getType();
             if (type == Material.WATER) {
-                // 水面：その水ブロックの中（浸った状態）に置く
-                return new Location(world, x, y + 0.2, z);
+                if (!fish) {
+                    // 水面：その水ブロックの中（浸った状態）に置く
+                    return new Location(world, x, y + 0.2, z);
+                }
+                // 魚：見つかった水面から、水が連続している範囲の下端まで探し、
+                // その間のランダムな深さに浮かせる（常に水面最上部になってしまう不具合の修正）。
+                int waterBottom = y;
+                while (waterBottom - 1 >= bottom
+                        && world.getBlockAt(bx, waterBottom - 1, bz).getType() == Material.WATER) {
+                    waterBottom--;
+                }
+                int span = y - waterBottom + 1;
+                int randomY = waterBottom + ThreadLocalRandom.current().nextInt(span);
+                return new Location(world, x, randomY + 0.2, z);
             }
             if (type.isSolid()) {
                 // 地面：ブロックのすぐ上に置く
