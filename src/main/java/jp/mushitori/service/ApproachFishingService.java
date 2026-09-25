@@ -60,14 +60,21 @@ import java.util.concurrent.ThreadLocalRandom;
  *       （後から範囲内に入ってきた個体も、次の巡回で見つかります）</li>
  *   <li>いた場合、{@code patience-seconds}だけ待つ（じっと糸を垂らし続ける）と、
  *       範囲内の対象個体それぞれが独立に{@code trigger-chance}で判定される
- *       （個体が多いほど、誰かが反応しやすくなる）。誰も反応しなければ
- *       {@code retry-interval-seconds}おきに再判定し続ける（待てば待つほどチャンスがある）</li>
+ *       （個体が多いほど、誰かが反応しやすくなる）。ただし浮きへの経路がそもそも
+ *       見つからない個体（地面に近い・孤立した水たまり等）は、この判定にすら入らない。
+ *       誰も反応しなければ{@code retry-interval-seconds}おきに再判定し続ける
+ *       （待てば待つほどチャンスがある）。反応した個体のうち実際に誘導するのは1匹だけだが、
+ *       選ばれなかった個体の一部（{@code loiter-chance}）は、{@code loiter-duration-seconds}の間
+ *       浮きの近く（{@code loiter-radius}以内）をうろつく</li>
  *   <li>反応した個体（複数いれば1匹選ぶ）を、Paperのパスファインダー
  *       （{@link com.destroystokyo.paper.entity.Pathfinder}）で浮きへ誘導する。魚の
  *       ナビゲーションは水中限定のため、壁や陸地を突っ切ることはなく、水がつながって
  *       いない孤立した水たまりにいる場合はそもそも経路が見つからない（＝捕まえられない）。
  *       迂回すればつながっている場合は、自然にその迂回ルートを通る。浮きが水面から
- *       離れた、または魚が水中にいなくなった場合は、その時点で誘導を打ち切る</li>
+ *       離れた、または魚が水中にいなくなった場合は、その時点で誘導を打ち切る。
+ *       あきらめて逃げるまでの猶予（{@code give-up-seconds}）は、接近の体感速度の基準
+ *       （{@code min/max-approach-seconds}）とは別物で、大きく長く取っている
+ *       （経路探索に手間取っているだけで、ほとんど諦めないようにするため）</li>
  *   <li>浮きに完全に密着したら「振るタイミング」の合図（音・パーティクル）を出し、
  *       一定時間だけ受付ける。その間にプレイヤーが竿を振る（リールを巻く）と、
  *       生物の基準の逃げやすさ＋竿の補正で判定し、逃げられなければ釣れる</li>
@@ -110,26 +117,32 @@ public final class ApproachFishingService {
     private final Map<UUID, Session> sessions = new ConcurrentHashMap<>();
     /** まだ誘導は始まっていない「様子を見ている」待機タスク。 */
     private final Map<UUID, ScheduledTask> waitingTasks = new ConcurrentHashMap<>();
-    /** 他のプレイヤーと同時に取り合われないよう、誘導・待機の対象になっている個体のUUID。 */
+    /** 反応したが選ばれなかった魚が、浮きの近くをうろついている間のタスク（エンティティUUID単位）。 */
+    private final Map<UUID, ScheduledTask> loiterTasks = new ConcurrentHashMap<>();
+    /** 他のプレイヤーと同時に取り合われないよう、誘導・待機・うろつき中の対象になっている個体のUUID。 */
     private final Set<UUID> reservedFish = ConcurrentHashMap.newKeySet();
     /** 逃げた個体が、次に判定対象へ戻ってよくなる時刻（エンティティUUID → epoch millis）。 */
     private final Map<UUID, Long> fishCooldownUntil = new ConcurrentHashMap<>();
 
     private boolean enabled = true;
     private boolean debug = false;
-    private double noticeRadius = 8.0;
+    private double noticeRadius = 10.0;
     private double patienceSeconds = 15.0;
     private double retryIntervalSeconds = 5.0;
     private double triggerChance = 0.25;
     private double minApproachSeconds = 2.5;
     private double maxApproachSeconds = 5.0;
-    private double arrivalDistance = 1.2;
+    private double giveUpSeconds = 60.0;
+    private double arrivalDistance = 0.2;
     private double approachDepthOffset = 0.4;
     private double windowSeconds = 1.2;
     private int intervalTicks = 4;
     private double extraSizeBonus = 0.10;
     private double escapeCooldownSeconds = 20.0;
     private int landingWaitTicks = 20;
+    private double loiterChance = 0.5;
+    private double loiterRadius = 3.0;
+    private double loiterDurationSeconds = 20.0;
     private EscapeMode escapeMode = EscapeMode.RELOCATE;
     private double relocateRadius = 9.0;
     private Sound windowStartSound = Sound.ENTITY_FISHING_BOBBER_SPLASH;
@@ -143,19 +156,23 @@ public final class ApproachFishingService {
         if (section == null) return;
         enabled = section.getBoolean("enabled", true);
         debug = section.getBoolean("debug", false);
-        noticeRadius = Math.max(1.0, section.getDouble("notice-radius", 8.0));
+        noticeRadius = Math.max(1.0, section.getDouble("notice-radius", 10.0));
         patienceSeconds = Math.max(0.0, section.getDouble("patience-seconds", 15.0));
         retryIntervalSeconds = Math.max(0.5, section.getDouble("retry-interval-seconds", 5.0));
         triggerChance = section.getDouble("trigger-chance", 0.25);
         minApproachSeconds = Math.max(0.5, section.getDouble("min-approach-seconds", 2.5));
         maxApproachSeconds = Math.max(minApproachSeconds, section.getDouble("max-approach-seconds", 5.0));
-        arrivalDistance = Math.max(0.15, section.getDouble("arrival-distance", 0.35));
+        giveUpSeconds = Math.max(maxApproachSeconds, section.getDouble("give-up-seconds", 60.0));
+        arrivalDistance = Math.max(0.1, section.getDouble("arrival-distance", 0.2));
         approachDepthOffset = Math.max(0.0, section.getDouble("approach-depth-offset", 0.4));
         windowSeconds = Math.max(0.3, section.getDouble("window-seconds", 1.2));
         intervalTicks = Math.max(1, section.getInt("update-interval-ticks", 4));
         extraSizeBonus = Math.max(0.0, section.getDouble("extra-size-bonus", 0.10));
         escapeCooldownSeconds = Math.max(0.0, section.getDouble("escape-cooldown-seconds", 20.0));
         landingWaitTicks = Math.max(1, section.getInt("landing-wait-ticks", 20));
+        loiterChance = Math.max(0.0, Math.min(1.0, section.getDouble("loiter-chance", 0.5)));
+        loiterRadius = Math.max(0.5, section.getDouble("loiter-radius", 3.0));
+        loiterDurationSeconds = Math.max(1.0, section.getDouble("loiter-duration-seconds", 20.0));
         windowStartSound = parseSound(section.getString("sound-window-start"), Sound.ENTITY_FISHING_BOBBER_SPLASH);
         catchSound = parseSound(section.getString("sound-catch"), Sound.ENTITY_EXPERIENCE_ORB_PICKUP);
 
@@ -302,9 +319,12 @@ public final class ApproachFishingService {
                 return;
             }
 
-            // それぞれの個体が「独立して」確率判定する（個体が多いほど、誰かが反応しやすい）
+            // それぞれの個体が「独立して」確率判定する（個体が多いほど、誰かが反応しやすい）。
+            // 浮きへの経路がそもそも見つからない個体（地面に近い・孤立した水たまり等）は、
+            // 判定対象にすら入れない。
             List<Entity> succeeded = new ArrayList<>();
             for (Entity candidate : candidates) {
+                if (!hasPathToHook(candidate, hook)) continue;
                 String candidateCreatureId = plugin.spawnService().creatureIdOf(candidate);
                 Creature candidateCreature = candidateCreatureId == null ? null : plugin.creatures().get(candidateCreatureId);
                 double candidateTrigger = candidateCreature == null
@@ -329,6 +349,15 @@ public final class ApproachFishingService {
                 return;
             }
             log(candidates.size() + "匹中" + succeeded.size() + "匹が反応。1匹が寄ってきます。");
+
+            // 反応したが選ばれなかった魚は、一部（loiter-chance）が浮きの近くをうろつく演出に回る。
+            for (Entity notChosen : succeeded) {
+                if (notChosen.equals(chosen)) continue;
+                if (ThreadLocalRandom.current().nextDouble() <= loiterChance) {
+                    startLoiter(hook, notChosen);
+                }
+            }
+
             t.cancel();
             waitingTasks.remove(playerId);
             beginLure(player, hook, chosen, rodSizeBonus, rodEscapeModifier);
@@ -366,9 +395,14 @@ public final class ApproachFishingService {
 
         double seconds = effectiveMinApproach
                 + ThreadLocalRandom.current().nextDouble() * (effectiveMaxApproach - effectiveMinApproach);
-        int approachUpdates = Math.max(1, (int) Math.round(seconds * 20.0 / intervalTicks));
+        // remaining: 接近速度（ペース感）の基準。従来通り、残りが減るほど急かすように速くなる。
+        // giveUpRemaining: 実際にあきらめて逃げるまでの猶予。ペースの基準とは切り離し、
+        // 大幅に長く取ることで、経路探索に手間取っているだけの個体を早々に見切らないようにする。
+        int paceUpdates = Math.max(1, (int) Math.round(seconds * 20.0 / intervalTicks));
         int windowUpdates = Math.max(1, (int) Math.round(effectiveWindow * 20.0 / intervalTicks));
-        int[] remaining = {approachUpdates};
+        int giveUpUpdates = Math.max(paceUpdates, (int) Math.round(giveUpSeconds * 20.0 / intervalTicks));
+        int[] remaining = {paceUpdates};
+        int[] giveUpRemaining = {giveUpUpdates};
 
         lureFish.getScheduler().runAtFixedRate(plugin, task -> {
             Session current = sessions.get(player.getUniqueId());
@@ -384,13 +418,14 @@ public final class ApproachFishingService {
             }
 
             if (session.phase == Phase.APPROACHING) {
-                remaining[0]--;
+                if (remaining[0] > 1) remaining[0]--; // ペース基準は1で下げ止め（速度計算の分母を守る）
+                giveUpRemaining[0]--;
 
                 if (!lureFish.isInWater()) {
                     // 何らかの理由で陸に上がってしまった：ぴちぴちと跳ねながら、
                     // 近くの水へ少しずつ戻す（浮きへの接近は、水に戻るまでお預け）
                     hopTowardWater(lureFish);
-                    if (remaining[0] <= 0) {
+                    if (giveUpRemaining[0] <= 0) {
                         log("陸から水へ戻れないまま時間切れになりました。あきらめました。");
                         task.cancel();
                         cancel(player);
@@ -406,7 +441,7 @@ public final class ApproachFishingService {
                     player.playSound(hook.getLocation(), windowStartSound, 1.0f, 1.3f);
                     hook.getWorld().spawnParticle(Particle.SPLASH, hook.getLocation(), 14, 0.2, 0.1, 0.2, 0.02);
                     log("浮きに完全に密着。竿を振るタイミングです（" + windowSeconds + "秒間）。");
-                } else if (remaining[0] <= 0) {
+                } else if (giveUpRemaining[0] <= 0) {
                     log("時間切れで浮きに到達できず、あきらめました。");
                     task.cancel();
                     cancel(player);
@@ -420,6 +455,17 @@ public final class ApproachFishingService {
                 }
             }
         }, () -> cleanupOnRetire(player.getUniqueId(), session), intervalTicks, intervalTicks);
+    }
+
+    /**
+     * 浮きへの経路がそもそも見つからない個体を、トリガー判定の対象から除外するための判定。
+     * {@link com.destroystokyo.paper.entity.Pathfinder#findPath(Location)} は経路を計算するだけで
+     * 実際には移動させないため、こうした事前チェック用途に使える。
+     */
+    private boolean hasPathToHook(Entity fish, FishHook hook) {
+        if (!(fish instanceof Mob mob)) return true; // パスファインダーを持たない種は判定できないため許可する
+        Location target = hook.getLocation().clone().subtract(0, approachDepthOffset, 0);
+        return mob.getPathfinder().findPath(target) != null;
     }
 
     /**
@@ -475,6 +521,43 @@ public final class ApproachFishingService {
         toward.normalize().multiply(0.35);
         toward.setY(0.4); // ぴちぴちと跳ねる、上向きの成分
         fish.setVelocity(toward);
+    }
+
+    /**
+     * 反応したが選ばれなかった魚を、浮きの近く（{@code loiter-radius}以内）にとどめておく演出。
+     * {@code loiter-duration-seconds}経つか、浮き・個体が無効になったら自然に解除する
+     * （その間は{@link #reservedFish}に入れ、他のトリガー判定の対象から外す）。
+     */
+    private void startLoiter(FishHook hook, Entity fish) {
+        if (!reservedFish.add(fish.getUniqueId())) return; // 既に確保済みなら何もしない
+        long durationTicks = Math.max(1L, Math.round(loiterDurationSeconds * 20.0));
+        long[] remaining = {durationTicks};
+
+        ScheduledTask task = fish.getScheduler().runAtFixedRate(plugin, t -> {
+            if (!fish.isValid() || !hook.isValid()) {
+                t.cancel();
+                return;
+            }
+            remaining[0] -= intervalTicks;
+            if (remaining[0] <= 0) {
+                t.cancel();
+                return;
+            }
+            if (fish instanceof Mob mob && fish.getLocation().distance(hook.getLocation()) > loiterRadius) {
+                mob.getPathfinder().moveTo(randomPointNear(hook.getLocation(), loiterRadius * 0.6), 0.5);
+            }
+        }, () -> {
+            loiterTasks.remove(fish.getUniqueId());
+            reservedFish.remove(fish.getUniqueId());
+        }, intervalTicks, intervalTicks);
+        loiterTasks.put(fish.getUniqueId(), task);
+    }
+
+    /** 中心から半径内のランダムな水平点（Yは中心と同じ）を返す。 */
+    private Location randomPointNear(Location center, double radius) {
+        double angle = ThreadLocalRandom.current().nextDouble(0, Math.PI * 2);
+        double dist = ThreadLocalRandom.current().nextDouble(0, radius);
+        return center.clone().add(Math.cos(angle) * dist, 0, Math.sin(angle) * dist);
     }
 
     /** 近くの水ブロックを、力任せに探す（見つからなければ null）。 */
@@ -589,11 +672,15 @@ public final class ApproachFishingService {
         handleEscape(session);
     }
 
-    /** プラグイン無効化時に、進行中の待機・誘導をすべて片付ける。 */
+    /** プラグイン無効化時に、進行中の待機・誘導・うろつきをすべて片付ける。 */
     public void cancelAll() {
         for (UUID uuid : Set.copyOf(waitingTasks.keySet())) {
             ScheduledTask waiting = waitingTasks.remove(uuid);
             if (waiting != null) waiting.cancel();
+        }
+        for (UUID uuid : Set.copyOf(loiterTasks.keySet())) {
+            ScheduledTask loiter = loiterTasks.remove(uuid);
+            if (loiter != null) loiter.cancel();
         }
         for (UUID uuid : Set.copyOf(sessions.keySet())) {
             handleEscape(sessions.remove(uuid));
