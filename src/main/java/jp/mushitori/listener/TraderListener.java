@@ -203,26 +203,23 @@ public final class TraderListener implements Listener {
      * この個体自身が未登録なら「未登録」として扱う。
      */
     /**
-     * 売上（total）を、持ち物にある財布・小銭入れへ自動的に入金する。
-     * 財布（お金なら何でも入る）を優先して探し、無ければ小銭入れ（硬貨のみ）を探す。
-     * 財布・小銭入れを持っていない、または入りきらなかった・条件に合わなかった分は、
+     * 売上（total）を、手に持っている財布・小銭入れへ自動的に入金する。
+     * 同じ種類のお金が既に入っていれば、まずそこへ重ねる（最大スタック数まで）。
+     * 財布・小銭入れを手に持っていない、または入りきらなかった・条件に合わなかった分は、
      * これまで通り直接持ち物へ渡す（入らなければ足元にドロップ）。
      */
     private void depositMoney(Player player, int total) {
         List<ItemStack> denomination = plugin.money().denominate(total);
         if (denomination.isEmpty()) return;
 
-        int slot = findPurseSlot(player, PurseService.Filter.ANY_MONEY);
-        if (slot < 0) slot = findPurseSlot(player, PurseService.Filter.COIN_ONLY);
-
-        if (slot < 0) {
+        ItemStack purseItem = player.getInventory().getItemInMainHand();
+        if (!plugin.purseService().isPurse(purseItem)) {
             for (ItemStack money : denomination) {
                 giveOrDrop(player, money);
             }
             return;
         }
 
-        ItemStack purseItem = player.getInventory().getItem(slot);
         var filter = plugin.purseService().filterOf(purseItem);
         int capacity = plugin.purseService().capacityOf(purseItem);
         List<ItemStack> existing = new ArrayList<>(plugin.purseService().contentsOf(purseItem));
@@ -230,23 +227,29 @@ public final class TraderListener implements Listener {
         for (ItemStack money : denomination) {
             boolean matches = filter != PurseService.Filter.COIN_ONLY
                     || plugin.money().isCoin(money);
-            if (matches && existing.size() < capacity) {
+            if (!matches) {
+                giveOrDrop(player, money);
+                continue;
+            }
+            // 既存の同じお金のスタックへ重ねる
+            for (ItemStack stack : existing) {
+                if (money.getAmount() <= 0) break;
+                if (!stack.isSimilar(money)) continue;
+                int space = stack.getMaxStackSize() - stack.getAmount();
+                if (space <= 0) continue;
+                int moved = Math.min(space, money.getAmount());
+                stack.setAmount(stack.getAmount() + moved);
+                money.setAmount(money.getAmount() - moved);
+            }
+            if (money.getAmount() <= 0) continue;
+            if (existing.size() < capacity) {
                 existing.add(money);
             } else {
                 giveOrDrop(player, money);
             }
         }
         plugin.purseService().setContents(purseItem, existing);
-        player.getInventory().setItem(slot, purseItem);
-    }
-
-    private int findPurseSlot(Player player, PurseService.Filter filter) {
-        ItemStack[] contents = player.getInventory().getStorageContents();
-        for (int i = 0; i < contents.length; i++) {
-            ItemStack item = contents[i];
-            if (plugin.purseService().isPurse(item) && plugin.purseService().filterOf(item) == filter) return i;
-        }
-        return -1;
+        player.getInventory().setItemInMainHand(purseItem);
     }
 
     private boolean hasUnregistered(List<ItemStack> items) {
