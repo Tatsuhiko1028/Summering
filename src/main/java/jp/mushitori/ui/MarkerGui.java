@@ -1,6 +1,7 @@
 package jp.mushitori.ui;
 
 import jp.mushitori.MushitoriPlugin;
+import jp.mushitori.model.ApproachOverrides;
 import jp.mushitori.model.Creature;
 import jp.mushitori.model.SpawnMarker;
 import jp.mushitori.model.WeightedCreature;
@@ -40,7 +41,6 @@ public final class MarkerGui implements InventoryHolder {
     public static final int SLOT_RENAME = 30;
     public static final int SLOT_DELETE = 26;
     public static final int SLOT_RESET_MOBS = 27;
-    public static final int SLOT_SIZE_TEMPLATE = 28;
     private static final int SLOT_INFO = 4;
 
     private final MushitoriPlugin plugin;
@@ -87,7 +87,7 @@ public final class MarkerGui implements InventoryHolder {
         for (int slot : new int[]{
                 SLOT_INFO, SLOT_TRIGGER_RADIUS, SLOT_DESPAWN_RADIUS, SLOT_SPAWN_RADIUS,
                 SLOT_MAX_COUNT, SLOT_SIMULTANEOUS_MAX, SLOT_SPAWN_INTERVAL, SLOT_CATCH_WINDOW, SLOT_SPAWN_CHANCE,
-                SLOT_PRESET, SLOT_RENAME, SLOT_DELETE, SLOT_RESET_MOBS, SLOT_SIZE_TEMPLATE}) {
+                SLOT_PRESET, SLOT_RENAME, SLOT_DELETE, SLOT_RESET_MOBS}) {
             inventory.setItem(slot, null);
         }
         for (int slot : CREATURE_SLOTS) {
@@ -140,13 +140,6 @@ public final class MarkerGui implements InventoryHolder {
                 List.of(gray("現在の生存数: " + currentMobs + "体"),
                         gray("クリックで、今いる個体を全てデスポーンさせます"),
                         gray("（マーカー自体は削除されません）"))));
-
-        String templateName = working.sizeDistributionTemplate();
-        inventory.setItem(SLOT_SIZE_TEMPLATE, icon(Material.SLIME_BALL,
-                Component.text("サイズ分布テンプレート", NamedTextColor.LIGHT_PURPLE),
-                List.of(gray("現在: " + (templateName == null ? "既定（sizesセクション）" : templateName)),
-                        gray("クリックで、次のテンプレートに切り替え"),
-                        gray("（一周すると既定に戻ります）"))));
     }
 
     private ItemStack creatureIcon(@Nullable WeightedCreature wc, int index, int totalWeight) {
@@ -164,15 +157,21 @@ public final class MarkerGui implements InventoryHolder {
                 ? "無し（creatures.yml本来の設定）"
                 : String.join(", ", wc.requiredTagsOverride());
         String overrideInfo = wc.override().isEmpty() ? "無し" : "あり（シフト+左クリックで確認）";
+        String sizeEventInfo = wc.sizeDistributionTemplate() == null
+                ? "無し（既定）" : wc.sizeDistributionTemplate();
+        String approachInfo = wc.approachOverride().equals(ApproachOverrides.EMPTY)
+                ? "無し" : "あり（シフト+左クリックで確認）";
         return icon(creatureSlotMaterial(), creatureSlotCustomModelData(),
                 Component.text(name + "  (重み " + wc.weight() + " ≒ " + percent + ")", NamedTextColor.AQUA),
                 List.of(gray("ID: " + wc.creatureId()),
                         gray("必要タグの上書き: " + tagInfo),
-                        gray("スケール・動きの上書き: " + overrideInfo),
+                        gray("スケール・動き・レア度の上書き: " + overrideInfo),
+                        gray("サイズイベント: " + sizeEventInfo),
+                        gray("アプローチ（寄ってくる釣り）の上書き: " + approachInfo),
                         gray("左クリック: 生物の一覧を開いて切り替える"),
                         gray("右クリック: ウェイト -1"),
                         gray("シフト+右クリック: ウェイト +1"),
-                        gray("シフト+左クリック: 詳細設定を開く（スケール・動き等）")));
+                        gray("シフト+左クリック: 詳細設定を開く")));
     }
 
     /** 生物枠アイコンの素材。config.yml の ambient-spawn.creature-slot-material（既定RABBIT_HIDE）。 */

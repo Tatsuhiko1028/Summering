@@ -1,7 +1,5 @@
 package jp.mushitori.model;
 
-import org.jetbrains.annotations.Nullable;
-
 import java.util.List;
 
 /**
@@ -10,6 +8,10 @@ import java.util.List;
  * <p>マーカーは作成時に全ての値を自前で持ちます（設置時に、その時点のグローバル既定値・
  * プリセットからコピーして持たせます）。これにより、マーカー設定画面（GUI）で
  * マーカーごとに個別に編集できます。</p>
+ *
+ * <p>サイズ段階抽選のテンプレート（「サイズイベント」）は、以前はマーカー全体の設定
+ * でしたが、生物ごとに違う分布にしたいことが多かったため、{@link WeightedCreature#sizeDistributionTemplate()}
+ * （生物枠ごとの上書き）に移しました。</p>
  *
  * @param id                  一意なID（連番）
  * @param name                マーカーの名前（管理用。省略時は "マーカー #id" のように表示）
@@ -35,9 +37,6 @@ import java.util.List;
  * @param catchWindowSeconds  直近何秒以内の捕獲を「まだ数えている最中」とみなすか
  *                            （maxCountの判定は「現在の生存数＋直近catchWindowSeconds以内に
  *                            捕まえられた数」がmaxCountを下回っているかどうかで行います）
- * @param sizeDistributionTemplate このマーカーから湧く個体のサイズ段階抽選に使う、
- *                            config.yml size-distribution-templates の名前。nullまたは
- *                            未定義の名前なら、既定のsizesセクションの重みをそのまま使います。
  */
 public record SpawnMarker(
         int id,
@@ -54,8 +53,7 @@ public record SpawnMarker(
         int simultaneousMax,
         double spawnIntervalSeconds,
         double spawnChance,
-        double catchWindowSeconds,
-        @Nullable String sizeDistributionTemplate
+        double catchWindowSeconds
 ) {
     /** 最大何種類まで持てるか（GUIのスロット数と一致させています）。 */
     public static final int MAX_SPECIES = 9;

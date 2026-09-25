@@ -258,12 +258,14 @@ sizes:
     weight: 0.1
     price-mult: 4.0
 
-# サイズ分布テンプレート（任意）。マーカーごとに、上のsizesセクションの重みとは
-# 別の重みを使いたい場合に定義します。tierキー（mottomo_chiisai等）ごとにweightだけを
-# 上書きします（name・price-mult・legendary-nameは上のsizesセクションのものを
-# そのまま使います）。一部のtierだけ書けば、書かなかったtierは上のsizesセクションの
-# 重みのままになります。マーカー設定画面（MarkerGui）で、どのテンプレートを使うか
-# 選べます（未選択なら、上のsizesセクションの重みがそのまま使われます）。
+# サイズ分布テンプレート（任意、「サイズイベント」）。マーカーの生物枠ごとに、上の
+# sizesセクションの重みとは別の重みを使いたい場合に定義します。tierキー
+# （mottomo_chiisai等）ごとにweightだけを上書きします（name・price-mult・
+# legendary-nameは上のsizesセクションのものをそのまま使います）。一部のtierだけ
+# 書けば、書かなかったtierは上のsizesセクションの重みのままになります。マーカーの
+# 生物枠の詳細設定画面（CreatureDetailGui、生物枠をシフト+左クリック）で、
+# 枠ごとにどのテンプレートを使うか選べます（未選択なら、上のsizesセクションの
+# 重みがそのまま使われます）。
 size-distribution-templates:
   # 例：大物イベント用。ふつう・ちいさい系統を減らし、おおきい系統を大幅に増やす
   big_event:

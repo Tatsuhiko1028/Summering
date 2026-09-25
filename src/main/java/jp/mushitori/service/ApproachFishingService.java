@@ -202,10 +202,15 @@ public final class ApproachFishingService {
         // 最初に見つからなくても、ここでは諦めない（一定間隔ごとに探し続ける。下のタスクを参照）。
         // 待ち時間（patience/retry）は、見つかっていれば一番近い個体の設定を、
         // まだ見つかっていなければ既定値を基準にする。
-        String closestCreatureId = nearby.isEmpty() ? null : plugin.spawnService().creatureIdOf(nearby.get(0));
-        ApproachOverrides baseOverrides = closestCreatureId == null
-                ? ApproachOverrides.EMPTY
-                : plugin.creatures().approachOverridesFor(closestCreatureId);
+        ApproachOverrides baseOverrides = ApproachOverrides.EMPTY;
+        if (!nearby.isEmpty()) {
+            Entity closest = nearby.get(0);
+            String closestCreatureId = plugin.spawnService().creatureIdOf(closest);
+            Creature closestCreature = closestCreatureId == null ? null : plugin.creatures().get(closestCreatureId);
+            if (closestCreature != null) {
+                baseOverrides = plugin.ambientSpawnService().effectiveApproachOverrides(closest, closestCreature);
+            }
+        }
 
         double effectivePatience = baseOverrides.patienceSeconds(patienceSeconds);
         double effectiveRetry = baseOverrides.retryIntervalSeconds(retryIntervalSeconds);
@@ -242,9 +247,11 @@ public final class ApproachFishingService {
             List<Entity> succeeded = new ArrayList<>();
             for (Entity candidate : candidates) {
                 String candidateCreatureId = plugin.spawnService().creatureIdOf(candidate);
-                double candidateTrigger = candidateCreatureId == null
+                Creature candidateCreature = candidateCreatureId == null ? null : plugin.creatures().get(candidateCreatureId);
+                double candidateTrigger = candidateCreature == null
                         ? triggerChance
-                        : plugin.creatures().approachOverridesFor(candidateCreatureId).triggerChance(triggerChance);
+                        : plugin.ambientSpawnService().effectiveApproachOverrides(candidate, candidateCreature)
+                                .triggerChance(triggerChance);
                 if (ThreadLocalRandom.current().nextDouble() <= candidateTrigger) {
                     succeeded.add(candidate);
                 }
@@ -282,7 +289,7 @@ public final class ApproachFishingService {
             return;
         }
 
-        ApproachOverrides overrides = plugin.creatures().approachOverridesFor(creatureId);
+        ApproachOverrides overrides = plugin.ambientSpawnService().effectiveApproachOverrides(fish, creature);
         double effectiveMinApproach = overrides.minApproachSeconds(minApproachSeconds);
         double effectiveMaxApproach = Math.max(effectiveMinApproach, overrides.maxApproachSeconds(maxApproachSeconds));
         double effectiveWindow = overrides.windowSeconds(windowSeconds);

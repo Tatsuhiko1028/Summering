@@ -3,6 +3,7 @@ package jp.mushitori.service;
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import jp.mushitori.Keys;
 import jp.mushitori.MushitoriPlugin;
+import jp.mushitori.model.ApproachOverrides;
 import jp.mushitori.model.Creature;
 import jp.mushitori.model.CreatureOverride;
 import jp.mushitori.model.SpawnMarker;
@@ -111,7 +112,14 @@ public final class AmbientSpawnService {
 
     // ==================== マーカーの永続化 ====================
 
-    /** config.yml / spawn_markers.yml 双方で使う、生物一覧の読み込み（[{id: x, weight: n}, ...] 形式）。 */
+    /**
+     * config.yml / spawn_markers.yml 双方で使う、生物一覧の読み込み
+     * （[{id: x, weight: n, required-tags-override: [...], override: {...},
+     * size-distribution-template: x, approach-override: {...}}, ...] 形式）。
+     *
+     * <p>以前は id と weight しか読み書きしておらず、必要タグ・見た目/動きの上書きが
+     * 保存のたびに失われる（＝再読み込み・再起動のたびに上書きが消える）不具合があった。</p>
+     */
     private List<WeightedCreature> readWeightedCreatures(List<?> rawList) {
         List<WeightedCreature> result = new ArrayList<>();
         for (Object raw : rawList) {
@@ -121,7 +129,22 @@ public final class AmbientSpawnService {
                 int weight = 1;
                 Object weightObj = map.get("weight");
                 if (weightObj instanceof Number n) weight = Math.max(1, n.intValue());
-                result.add(new WeightedCreature(idObj.toString(), weight));
+
+                Set<String> tags = Set.of();
+                if (map.get("required-tags-override") instanceof List<?> tagList) {
+                    Set<String> parsed = new java.util.LinkedHashSet<>();
+                    for (Object t : tagList) {
+                        if (t != null) parsed.add(t.toString());
+                    }
+                    tags = parsed;
+                }
+
+                CreatureOverride override = readOverride(map.get("override"));
+                String sizeDistributionTemplate = getStringOrNull(map, "size-distribution-template");
+                ApproachOverrides approachOverride = readApproachOverride(map.get("approach-override"));
+
+                result.add(new WeightedCreature(idObj.toString(), weight, tags, override,
+                        sizeDistributionTemplate, approachOverride));
             } else if (raw instanceof String s && !s.isBlank()) {
                 // 後方互換：文字列だけのリストも、ウェイト1として受け付ける
                 result.add(new WeightedCreature(s, 1));
@@ -136,9 +159,93 @@ public final class AmbientSpawnService {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", wc.creatureId());
             m.put("weight", wc.weight());
+            if (!wc.requiredTagsOverride().isEmpty()) {
+                m.put("required-tags-override", new ArrayList<>(wc.requiredTagsOverride()));
+            }
+            if (!wc.override().isEmpty()) {
+                m.put("override", writeOverride(wc.override()));
+            }
+            if (wc.sizeDistributionTemplate() != null) {
+                m.put("size-distribution-template", wc.sizeDistributionTemplate());
+            }
+            if (!wc.approachOverride().equals(ApproachOverrides.EMPTY)) {
+                m.put("approach-override", writeApproachOverride(wc.approachOverride()));
+            }
             result.add(m);
         }
         return result;
+    }
+
+    private Map<String, Object> writeOverride(CreatureOverride ov) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        if (ov.scale() != null) m.put("scale", ov.scale());
+        if (ov.flying() != null) m.put("flying", ov.flying());
+        if (ov.escapeChance() != null) m.put("escape-chance", ov.escapeChance());
+        if (ov.fleeFromPlayers() != null) m.put("flee-from-players", ov.fleeFromPlayers());
+        if (ov.fleeRadius() != null) m.put("flee-radius", ov.fleeRadius());
+        if (ov.fleeSpeed() != null) m.put("flee-speed", ov.fleeSpeed());
+        if (ov.movementSpeedMultiplier() != null) m.put("movement-speed-multiplier", ov.movementSpeedMultiplier());
+        if (ov.escapeDespawns() != null) m.put("escape-despawns", ov.escapeDespawns());
+        if (ov.disableNectar() != null) m.put("disable-nectar", ov.disableNectar());
+        if (ov.sizeRarityTemplate() != null) m.put("size-rarity-template", ov.sizeRarityTemplate());
+        if (ov.baseRarityKey() != null) m.put("base-rarity", ov.baseRarityKey());
+        return m;
+    }
+
+    private CreatureOverride readOverride(Object raw) {
+        if (!(raw instanceof Map<?, ?> map)) return CreatureOverride.EMPTY;
+        return new CreatureOverride(
+                getDoubleOrNull(map, "scale"),
+                getBooleanOrNull(map, "flying"),
+                getDoubleOrNull(map, "escape-chance"),
+                getBooleanOrNull(map, "flee-from-players"),
+                getDoubleOrNull(map, "flee-radius"),
+                getDoubleOrNull(map, "flee-speed"),
+                getDoubleOrNull(map, "movement-speed-multiplier"),
+                getBooleanOrNull(map, "escape-despawns"),
+                getBooleanOrNull(map, "disable-nectar"),
+                getStringOrNull(map, "size-rarity-template"),
+                getStringOrNull(map, "base-rarity"));
+    }
+
+    private Map<String, Object> writeApproachOverride(ApproachOverrides ao) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        if (ao.patienceSeconds() != null) m.put("patience-seconds", ao.patienceSeconds());
+        if (ao.retryIntervalSeconds() != null) m.put("retry-interval-seconds", ao.retryIntervalSeconds());
+        if (ao.triggerChance() != null) m.put("trigger-chance", ao.triggerChance());
+        if (ao.minApproachSeconds() != null) m.put("min-approach-seconds", ao.minApproachSeconds());
+        if (ao.maxApproachSeconds() != null) m.put("max-approach-seconds", ao.maxApproachSeconds());
+        if (ao.windowSeconds() != null) m.put("window-seconds", ao.windowSeconds());
+        return m;
+    }
+
+    private ApproachOverrides readApproachOverride(Object raw) {
+        if (!(raw instanceof Map<?, ?> map)) return ApproachOverrides.EMPTY;
+        return new ApproachOverrides(
+                getDoubleOrNull(map, "patience-seconds"),
+                getDoubleOrNull(map, "retry-interval-seconds"),
+                getDoubleOrNull(map, "trigger-chance"),
+                getDoubleOrNull(map, "min-approach-seconds"),
+                getDoubleOrNull(map, "max-approach-seconds"),
+                getDoubleOrNull(map, "window-seconds"));
+    }
+
+    @Nullable
+    private static Double getDoubleOrNull(Map<?, ?> map, String key) {
+        Object v = map.get(key);
+        return v instanceof Number n ? n.doubleValue() : null;
+    }
+
+    @Nullable
+    private static Boolean getBooleanOrNull(Map<?, ?> map, String key) {
+        Object v = map.get(key);
+        return v instanceof Boolean b ? b : null;
+    }
+
+    @Nullable
+    private static String getStringOrNull(Map<?, ?> map, String key) {
+        Object v = map.get(key);
+        return v == null ? null : v.toString();
     }
 
     public void loadMarkers() {
@@ -171,9 +278,7 @@ public final class AmbientSpawnService {
                                 s.getInt("simultaneous-max", defaultSimultaneousMax),
                                 s.getDouble("spawn-interval-seconds", defaultSpawnIntervalSeconds),
                                 s.getDouble("spawn-chance", defaultSpawnChance),
-                                s.getDouble("catch-window-seconds", defaultCatchWindowSeconds),
-                                s.contains("size-distribution-template")
-                                        ? s.getString("size-distribution-template") : null);
+                                s.getDouble("catch-window-seconds", defaultCatchWindowSeconds));
                         markers.put(id, marker);
                         maxId = Math.max(maxId, id);
                     } catch (NumberFormatException ignored) {
@@ -209,9 +314,6 @@ public final class AmbientSpawnService {
             yaml.set(base + "spawn-interval-seconds", m.spawnIntervalSeconds());
             yaml.set(base + "spawn-chance", m.spawnChance());
             yaml.set(base + "catch-window-seconds", m.catchWindowSeconds());
-            if (m.sizeDistributionTemplate() != null) {
-                yaml.set(base + "size-distribution-template", m.sizeDistributionTemplate());
-            }
         }
         try {
             yaml.save(markersFile());
@@ -249,7 +351,7 @@ public final class AmbientSpawnService {
                 List.copyOf(creatures),
                 defaultTriggerRadius, defaultDespawnRadius, defaultSpawnRadius,
                 Math.max(1, maxCount), defaultSimultaneousMax,
-                defaultSpawnIntervalSeconds, defaultSpawnChance, defaultCatchWindowSeconds, null);
+                defaultSpawnIntervalSeconds, defaultSpawnChance, defaultCatchWindowSeconds);
         markers.put(id, marker);
         saveMarkers();
         if (enabled) startTask(marker);
@@ -263,6 +365,14 @@ public final class AmbientSpawnService {
         markers.put(updated.id(), updated);
         saveMarkers();
 
+        if (overridesChanged(previous.creatures(), updated.creatures())) {
+            // 生物枠の上書き（必要タグ・見た目/動き/レア度・サイズ分布・アプローチ）は
+            // 湧いた瞬間にしか個体へ反映されないため、既に湧いている個体は古い設定のまま。
+            // 変更をすぐ反映させるため、いったんデスポーンさせ、新しい設定で湧き直させる
+            // （でないと「上書きを変えたのに反映されない」ように見えてしまう）。
+            resetMarkerMobs(updated.id());
+        }
+
         boolean intervalChanged = previous.spawnIntervalSeconds() != updated.spawnIntervalSeconds();
         boolean locationChanged = !previous.worldName().equals(updated.worldName())
                 || previous.x() != updated.x() || previous.y() != updated.y() || previous.z() != updated.z();
@@ -270,6 +380,24 @@ public final class AmbientSpawnService {
             stopTask(updated.id());
             startTask(updated);
         }
+    }
+
+    /**
+     * 生物枠の「上書き」に関わる部分が変わったかどうか。ウェイトの増減や種類の入れ替えだけでは
+     * true にしない（そこは既に湧いている個体には影響しないため、わざわざリセットする必要が無い）。
+     */
+    private boolean overridesChanged(List<WeightedCreature> before, List<WeightedCreature> after) {
+        if (before.size() != after.size()) return true;
+        for (int i = 0; i < before.size(); i++) {
+            WeightedCreature a = before.get(i);
+            WeightedCreature b = after.get(i);
+            if (!a.creatureId().equals(b.creatureId())) return true;
+            if (!a.requiredTagsOverride().equals(b.requiredTagsOverride())) return true;
+            if (!a.override().equals(b.override())) return true;
+            if (!java.util.Objects.equals(a.sizeDistributionTemplate(), b.sizeDistributionTemplate())) return true;
+            if (!a.approachOverride().equals(b.approachOverride())) return true;
+        }
+        return false;
     }
 
     /** マーカーを別の場所へ移動する（巡回タスクも新しい場所で再起動します）。 */
@@ -282,8 +410,7 @@ public final class AmbientSpawnService {
                 newLocation.getX(), newLocation.getY(), newLocation.getZ(),
                 marker.creatures(), marker.triggerRadius(), marker.despawnRadius(), marker.spawnRadius(),
                 marker.maxCount(), marker.simultaneousMax(),
-                marker.spawnIntervalSeconds(), marker.spawnChance(), marker.catchWindowSeconds(),
-                marker.sizeDistributionTemplate());
+                marker.spawnIntervalSeconds(), marker.spawnChance(), marker.catchWindowSeconds());
         updateMarker(updated);
     }
 
@@ -361,6 +488,45 @@ public final class AmbientSpawnService {
     public boolean effectiveEscapeDespawns(Entity entity, Creature creature) {
         Byte raw = entity.getPersistentDataContainer().get(Keys.ESCAPE_DESPAWNS_OVERRIDE, PersistentDataType.BYTE);
         return raw != null ? raw != 0 : creature.behavior().escapeDespawns();
+    }
+
+    /**
+     * そのエンティティ（魚）に実際に適用される「寄ってくる釣り」関連設定。
+     * creatures.yml側の approach セクション（{@link jp.mushitori.registry.CreatureRegistry#approachOverridesFor}）を
+     * 土台に、マーカーの生物枠ごとの上書きがあればそちらを重ねる。
+     */
+    public ApproachOverrides effectiveApproachOverrides(Entity entity, Creature creature) {
+        ApproachOverrides base = plugin.creatures().approachOverridesFor(creature.id());
+        String raw = entity.getPersistentDataContainer().get(Keys.APPROACH_OVERRIDE, PersistentDataType.STRING);
+        if (raw == null) return base;
+        return decodeApproachOverride(raw).applyTo(base);
+    }
+
+    private static String encodeApproachOverride(ApproachOverrides ao) {
+        return joinNullable(ao.patienceSeconds()) + "|" + joinNullable(ao.retryIntervalSeconds()) + "|"
+                + joinNullable(ao.triggerChance()) + "|" + joinNullable(ao.minApproachSeconds()) + "|"
+                + joinNullable(ao.maxApproachSeconds()) + "|" + joinNullable(ao.windowSeconds());
+    }
+
+    private static String joinNullable(@Nullable Double v) {
+        return v == null ? "" : String.valueOf(v);
+    }
+
+    private static ApproachOverrides decodeApproachOverride(String raw) {
+        String[] parts = raw.split("\\|", -1);
+        if (parts.length != 6) return ApproachOverrides.EMPTY;
+        return new ApproachOverrides(parseNullable(parts[0]), parseNullable(parts[1]), parseNullable(parts[2]),
+                parseNullable(parts[3]), parseNullable(parts[4]), parseNullable(parts[5]));
+    }
+
+    @Nullable
+    private static Double parseNullable(String s) {
+        if (s == null || s.isEmpty()) return null;
+        try {
+            return Double.parseDouble(s);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     @Nullable
@@ -643,7 +809,7 @@ public final class AmbientSpawnService {
                 log(marker, "範囲内に安全な地面・水面が見つからなかったため、この枠は見送ります。");
                 continue;
             }
-            Entity spawned = plugin.spawnService().spawn(creature, spawnAt, marker.sizeDistributionTemplate(),
+            Entity spawned = plugin.spawnService().spawn(creature, spawnAt, picked.sizeDistributionTemplate(),
                     picked.override());
             if (spawned == null) continue;
             spawned.getPersistentDataContainer().set(Keys.MARKER_ID, PersistentDataType.INTEGER, markerId);
@@ -664,6 +830,10 @@ public final class AmbientSpawnService {
             if (ov.escapeDespawns() != null) {
                 spawned.getPersistentDataContainer().set(Keys.ESCAPE_DESPAWNS_OVERRIDE, PersistentDataType.BYTE,
                         (byte) (ov.escapeDespawns() ? 1 : 0));
+            }
+            if (!picked.approachOverride().equals(ApproachOverrides.EMPTY)) {
+                spawned.getPersistentDataContainer().set(Keys.APPROACH_OVERRIDE, PersistentDataType.STRING,
+                        encodeApproachOverride(picked.approachOverride()));
             }
             mobs.add(spawned.getUniqueId());
             spawnedThisTick++;

@@ -144,6 +144,11 @@ public final class CatchService {
         return new ArrayList<>(sizeDistributionTemplates.keySet());
     }
 
+    /** サイズ→レア度繰り上げテンプレート（size-rarity-templates）の名前一覧。マーカーの上書きUIで使う。 */
+    public List<String> sizeRarityTemplateNames() {
+        return new ArrayList<>(sizeRarityTemplates.keySet());
+    }
+
     /** サイズ→レア度繰り上げのテンプレート一式と、既定で使うテンプレート名。 */
     public void setSizeRarityTemplates(Map<String, SizeRarityTemplate> templates, String defaultTemplateName) {
         this.sizeRarityTemplates = templates == null ? Map.of() : Map.copyOf(templates);

@@ -75,4 +75,18 @@ public record Creature(
                 customModelData, entityType, order, escapeChance, baseRarityKey, sizeRarityTemplate,
                 tropicalFishVariant, baseScale, newBehavior, requiredTags, flying);
     }
+
+    /** sizeRarityTemplateだけを差し替えたコピーを返す（マーカーの生物枠ごとの上書き用）。 */
+    public Creature withSizeRarityTemplate(@Nullable String newSizeRarityTemplate) {
+        return new Creature(id, name, category, sizeMin, sizeMax, basePrice, habitat, description, material,
+                customModelData, entityType, order, escapeChance, baseRarityKey, newSizeRarityTemplate,
+                tropicalFishVariant, baseScale, behavior, requiredTags, flying);
+    }
+
+    /** baseRarityKeyだけを差し替えたコピーを返す（マーカーの生物枠ごとの上書き用）。 */
+    public Creature withBaseRarityKey(String newBaseRarityKey) {
+        return new Creature(id, name, category, sizeMin, sizeMax, basePrice, habitat, description, material,
+                customModelData, entityType, order, escapeChance, newBaseRarityKey, sizeRarityTemplate,
+                tropicalFishVariant, baseScale, behavior, requiredTags, flying);
+    }
 }
