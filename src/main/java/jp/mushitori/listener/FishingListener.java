@@ -13,6 +13,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerFishEvent;
+import org.bukkit.event.player.PlayerItemDamageEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 
@@ -34,8 +35,8 @@ import java.util.concurrent.ThreadLocalRandom;
  * <p>どちらも、生物の基準の逃げやすさ＋竿の escape-modifier で最終的に逃げられることがあります
  * （「正確に釣った」ように見えても、逃げられる可能性は残ります）。</p>
  *
- * <p><b>耐久値</b>：通常釣りは、釣れたとき・逃げられたとき、どちらも竿の耐久を1減らします
- * （{@link #consumeRodDurability(Player)}）。</p>
+ * <p><b>耐久値</b>：釣れたとき・逃げられたとき・釣るタイミングを逃したときに、竿の耐久を1減らします
+ * （{@link #consumeRodDurability(Player)}）。早く上げすぎた場合などは減りません。</p>
  */
 public final class FishingListener implements Listener {
 
@@ -55,7 +56,7 @@ public final class FishingListener implements Listener {
                 // キャストした瞬間。ここで近くの魚を誘導する演出を始める（試験実装）
                 FishHook hook = event.getHook();
                 if (hook != null) {
-                    ItemStack rodItem = player.getInventory().getItemInMainHand();
+                    ItemStack rodItem = rodInUse(player);
                     double sizeBonus = plugin.gear().sizeBonusOf(rodItem);
                     double escapeModifier = plugin.gear().escapeModifierOf(rodItem);
                     plugin.approachFishingService().maybeStart(player, hook, sizeBonus, escapeModifier,
@@ -77,14 +78,27 @@ public final class FishingListener implements Listener {
             // 自動発火するため含めない（含めると、誘導中の魚が勝手に逃げてしまう）
             case CAUGHT_ENTITY, REEL_IN ->
                     plugin.approachFishingService().onReelAttempt(player);
+            // バニラのアタリを見逃した（釣るタイミングを逃した）ときは、竿の耐久を1減らす
+            case FAILED_ATTEMPT -> consumeRodDurability(player);
             case IN_GROUND -> plugin.approachFishingService().cancel(player);
             default -> {
             }
         }
     }
 
+    /**
+     * 独自の竿は、バニラ側の耐久消費（地面に刺さった・エンティティを引っ掛けた・釣れた等）を打ち消す。
+     * 耐久の消費は {@link #consumeRodDurability(Player)} だけで行う。
+     */
+    @EventHandler(ignoreCancelled = true)
+    public void onItemDamage(PlayerItemDamageEvent event) {
+        if (isRod(event.getItem())) {
+            event.setCancelled(true);
+        }
+    }
+
     private void handleVanillaCatch(PlayerFishEvent event, Player player) {
-        ItemStack rodItem = player.getInventory().getItemInMainHand();
+        ItemStack rodItem = rodInUse(player);
         double sizeBonus = plugin.gear().sizeBonusOf(rodItem);
         double escapeModifier = plugin.gear().escapeModifierOf(rodItem);
         var rodTags = plugin.gear().tagsOf(rodItem);
@@ -128,9 +142,20 @@ public final class FishingListener implements Listener {
         }
     }
 
-    /** 竿の耐久を1減らす（通常釣りは、釣れたとき・逃げられたとき、どちらも呼ぶ）。 */
+    /**
+     * 使用中の竿。メインハンドに竿があればそれを、無ければオフハンドの竿を返す
+     * （両手に持っている場合はメインハンドのみ。竿の効果・耐久消費ともにこちらを対象にする）。
+     */
+    public static ItemStack rodInUse(Player player) {
+        ItemStack main = player.getInventory().getItemInMainHand();
+        if (isRod(main)) return main;
+        ItemStack off = player.getInventory().getItemInOffHand();
+        return isRod(off) ? off : main;
+    }
+
+    /** 竿の耐久を1減らす（釣れたとき・逃げられたとき・タイミングを逃したときに呼ぶ）。 */
     public static void consumeRodDurability(Player player) {
-        ItemStack held = player.getInventory().getItemInMainHand();
+        ItemStack held = rodInUse(player);
         if (!isRod(held)) return;
         boolean broken = GearRegistry.damage(held, 1);
         if (broken) {

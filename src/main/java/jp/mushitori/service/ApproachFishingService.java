@@ -478,6 +478,7 @@ public final class ApproachFishingService {
                 session.windowTicksLeft--;
                 if (session.windowTicksLeft <= 0) {
                     log("振るタイミングを逃し、魚は去っていきました。");
+                    FishingListener.consumeRodDurability(player); // タイミングを逃した場合も、竿の耐久は減る
                     task.cancel();
                     cancel(player);
                     if (isEffectivelyInWater(hook)) {
