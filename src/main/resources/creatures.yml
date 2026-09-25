@@ -1,0 +1,263 @@
+# =========================================================
+#  いきもの マスターデータ
+#  ★ 新しい虫・魚を足すときは、ここに1ブロック追加して
+#    /mushitori reload するだけ。再起動もビルドも不要です。
+#
+#  キー（fly の部分）が内部IDです。あとから変更しないでください
+#  （変更すると、そのIDの図鑑記録が別物として扱われます）
+#
+#  category : BUG  … 虫（虫取り網でとる）
+#             FISH … 魚（通常釣り・寄ってくる釣り、どちらの方法でも獲得できます。
+#                    以前あった FISH_ROD / FISH_APPROACH という2つのカテゴリは
+#                    廃止し、FISH の1つに統合しました）
+#  size-min / size-max : cm 単位。サイズ段階（config.yml の sizes）に応じて
+#                        この範囲内で実測cmが決まります
+#  item.material : アイテムのベース。見た目は item.custom-model-data（リソースパック側の
+#                  models/item/<material>.json の overrides で切り替える方式）で指定します
+#  entity        : /mushitori spawn で湧かせるベースエンティティ
+#                  （カスタムモデルを被せる土台。省略可）
+#                  「寄ってくる釣り」で狙えるようにするには、必ずこの entity で
+#                  /mushitori spawn しておく必要があります（浮きを投げただけで
+#                  自動的に湧くことはありません）。通常釣り（loot_table方式）だけで
+#                  よければ entity は省略できます。
+#
+#  rarities  : （廃止）レア度は下記の base-rarity ＋ サイズで決まるため、
+#              生物ごとの重み抽選テーブルは使いません。
+#  base-rarity : 固定のベースレア度（config.yml の rarities のキー。例: N, R, SR）。
+#              省略時は config.yml の catching.default-base-rarity が使われます。
+#              最終レア度は、捕まえた瞬間のサイズ段階に応じてここから繰り上がります
+#              （ランダム抽選ではありません。詳しい繰り上げルールは
+#              config.yml の size-rarity-templates を参照）。
+#  size-rarity-template : （任意）サイズ→レア度繰り上げのテンプレート名
+#              （config.yml の size-rarity-templates のキー）。省略時は
+#              catching.default-size-rarity-template が使われます。
+#  approach  : （任意）config.yml の fishing.approach を、この生物だけ上書きします。
+#              省略した項目は共通設定を使います。FISH ならどの生物でも指定できます
+#              （以前のように FISH_APPROACH 限定ではありません）。
+#              指定できるキー: patience-seconds, retry-interval-seconds,
+#              trigger-chance, min-approach-seconds, max-approach-seconds,
+#              window-seconds
+#  escape-chance : （任意）基準の逃げやすさ（0.0〜1.0）。省略時は config.yml の
+#              catching.default-escape-chance が使われます。道具（網・竿）の
+#              escape-modifier が加算されて最終的な逃走確率になります。
+#  required-tags : （任意）この生物を捕まえるのに必要な、道具（網・竿）側のタグの一覧。
+#              省略・空なら誰でも捕まえられます。指定すると、そのタグを全て持つ
+#              道具でなければ、そもそも捕獲の対象になりません（逃げるかどうかの
+#              判定にも入らず、完全に素通りします）。道具側のタグは nets.yml /
+#              rods.yml の各IDに tags: で設定します。
+#              例：特別なイベント限定の虫に required-tags: ["event"] を付け、
+#              イベント配布の網にだけ tags: ["event"] を付ける、といった使い方です。
+#  flying : （任意）空を飛ぶ生物かどうか。省略時は entity が BEE なら true、それ以外は
+#              false になります。素手で捕まえようとしたとき、飛ぶ生物はさらに
+#              捕まえにくくなります（詳しくは BareHandCatchListener を参照）。
+#  tropical-fish : （任意・entity: TROPICAL_FISH のときだけ有効）模様・体色・模様色の指定。
+#              pattern, body-color, pattern-color を省略した項目はバニラのランダムのまま。
+#  base-scale : （任意）見た目のスケールの基準値（既定1.0）。実測サイズと平均サイズの比に
+#              掛け合わされます（詳しい計算式は config.yml の catching.scale を参照）。
+#              例: entity が BEE の蝶を、本来のハチより一回り小さく見せたい場合は 0.7 のように。
+#              魚にも同様に設定できます（未設定だと既定1.0になり、実測サイズどおりに
+#              見た目が変化しない＝サイズと見た目が比例しない、という状態になりがちです）。
+#  behavior : （任意）生物ごとの独特の動き。省略した項目は下記の既定値を使います。
+#      disable-nectar            : （既定true）entity が BEE のとき、花の蜜を集めて巣へ運ぶ
+#                                   一連のバニラAI（見た目が変わる・花粉が出る原因）を無効化するか。
+#                                   蝶（BEE土台）は既定でtrueのため、通常は書かなくてOKです。
+#      flee-from-players         : （既定false）近くのプレイヤーから、物理的に走って逃げていく
+#                                   動きを追加するか（バニラのうさぎ・猫のイメージ。瞬間移動や
+#                                   消滅ではなく、パスファインダーで実際にその場から離れます）。
+#      flee-radius               : （既定5.0）逃げ始めるプレイヤーとの距離（ブロック）。
+#      flee-speed                : （既定1.0）逃げるときの移動速度（バニラのMob移動速度に対する倍率）。
+#      movement-speed-multiplier : （既定1.0）通常の移動速度に掛ける倍率。1.0未満でゆっくり、
+#                                   1.0より大きいと素早く動きます。
+#      escape-despawns           : （既定false）捕まえそこねて逃げられたとき、近くへ瞬間移動する
+#                                   （既定の動き）のではなく、その場で完全に消えるようにするか。
+#                                   trueにすると、いったん逃がすと同じ個体はもう追えません
+#                                   （マーカーからまた新しく湧くのを待つ形になります）。
+#      例（うさぎのようにジャンプで動く生物にしたい場合）：entity: RABBIT を指定すれば、
+#      バニラのうさぎ自体が元々ジャンプで移動するため、behavior側で特別な設定は不要です。
+#      SLIME等、ジャンプ移動を持つ他のentityでも同様です。
+# =========================================================
+
+creatures:
+
+  fly:
+    name: "ナミアゲハ"
+    category: BUG
+    size-min: 6.5
+    size-max: 12.0
+    base-price: 240
+    habitat: "未定"
+    description:
+      - "黒と黄色の大きな翅を持つ蝶。"
+      - "世間で『アゲハチョウ』と呼ばれる代表種。"
+    item:
+      material: PAPER
+      custom-model-data: 10001
+    entity: BEE
+    # entityがBEEのため、花の蜜集め（見た目が変わる・花粉が出る原因）は
+    # behavior.disable-nectarの既定値（true）により自動的に無効化されます
+    # （このためだけにbehaviorセクションを書く必要はありません）。
+    # 蝶は逃げやすい（0.5 = 50%が基準。めいじんの網なら -0.3 で 0.2 = 20%になる）
+    escape-chance: 0.5
+    # ベースは「いつもの」。最も〜のサイズでも、defaultテンプレートの条件
+    # （ベースがR以上）を満たさないため、でんせつには到達しない（すごくめずらしい止まり）
+    base-rarity: N
+    # entity（BEE）本来の大きさより一回り小さく見せる。ここからさらにサイズ段階で0.5〜1.5倍変化する
+    base-scale: 0.65
+
+  yellow_fly:
+    name: "キアゲハ"
+    category: BUG
+    size-min: 7.0
+    size-max: 12.0
+    base-price: 240
+    habitat: "未定"
+    description:
+      - "黄色の地に黒いスジ模様が映える蝶。翅の根本が黒く染まっている。"
+      - "アゲハチョウの仲間としては寒さに強く、高山や北極圏の厳しい環境でも生息している。"
+    item:
+      material: PAPER
+      custom-model-data: 10002
+    entity: BEE
+    # entityがBEEのため、蜜集めはbehavior.disable-nectarの既定値により自動的に無効化されます
+    # 蝶は逃げやすい（0.5 = 50%が基準。めいじんの網なら -0.3 で 0.2 = 20%になる）
+    escape-chance: 0.5
+    # ベースは「いつもの」。最も〜のサイズでも、defaultテンプレートの条件
+    # （ベースがR以上）を満たさないため、でんせつには到達しない（すごくめずらしい止まり）
+    base-rarity: N
+    # entity（BEE）本来の大きさより一回り小さく見せる。ここからさらにサイズ段階で0.5〜1.5倍変化する
+    base-scale: 0.7
+
+  kabutomushi:
+    name: "カブトムシ"
+    category: BUG
+    size-min: 4.0
+    size-max: 8.5
+    base-price: 500
+    habitat: "樫の木・夜"
+    description:
+      - "立派な角を持つ人気者。夜に木の幹へ集まる。"
+      - "角の長さで大きさが決まる。"
+    item:
+      material: PAPER
+      custom-model-data: 10003
+    entity: SILVERFISH
+    # カブトムシはそこそこ逃げにくい
+    escape-chance: 0.25
+    # ベースは「めずらしい」。最も〜のサイズになると、defaultテンプレートの
+    # 条件（ベースがR以上 かつ 最も〜）を満たすので、でんせつまで到達しうる
+    base-rarity: R
+
+  kanabun:
+    name: "カナブン"
+    category: BUG
+    size-min: 2.0
+    size-max: 3.2
+    base-price: 120
+    habitat: "樫の木・昼"
+    description:
+      - "金属質に輝く緑色の甲虫。"
+      - "数が多く、虫取り初心者の最初の一匹になりやすい。"
+    item:
+      material: PAPER
+      custom-model-data: 10004
+    entity: SILVERFISH
+    # カナブンはほとんど逃げない（初心者の最初の一匹になりやすい）
+    escape-chance: 0.08
+    base-rarity: N
+    # 例: カナブンは雑魚らしく、繰り上げが穏やかな gentle テンプレートを使う
+    # （とても〜でも繰り上がらず、最も〜でようやく+1段階＝せいぜい「めずらしい」まで）
+    size-rarity-template: gentle
+
+  # --- 魚（カテゴリはすべて FISH。通常釣り・寄ってくる釣り両方で狙えます） ---
+
+  madai:
+    name: "マダイ"
+    category: FISH
+    size-min: 20.0
+    size-max: 90.0
+    base-price: 1200
+    habitat: "海・一年中"
+    description:
+      - "縁起物として知られる赤い魚。"
+      - "ふつうの釣りざおでも、寄ってくる釣りでも狙える。"
+    item:
+      material: PAPER
+      custom-model-data: 10005
+    entity: COD
+    escape-chance: 0.15
+    base-rarity: N
+    base-scale: 1.0
+    # 寄ってくる釣りで狙うときの個別設定（省略すれば共通設定のまま）
+    approach:
+      patience-seconds: 12.0
+      trigger-chance: 0.30
+
+  ajimaru:
+    name: "アジ"
+    category: FISH
+    size-min: 10.0
+    size-max: 35.0
+    base-price: 300
+    habitat: "海・一年中"
+    description:
+      - "群れで泳ぐ、なじみ深い青魚。"
+    item:
+      material: PAPER
+      custom-model-data: 10006
+    entity: SALMON
+    escape-chance: 0.1
+    base-rarity: N
+    base-scale: 1.0
+    # 数が多い魚なので、寄ってくる釣りでも比較的当たりやすくしてある
+    approach:
+      patience-seconds: 8.0
+      trigger-chance: 0.40
+
+  nishikigoi:
+    name: "ニシキゴイ"
+    category: FISH
+    size-min: 15.0
+    size-max: 60.0
+    base-price: 2000
+    habitat: "池・一年中（/mushitori spawn nishikigoi で設置）"
+    description:
+      - "色鮮やかな鯉。管理者が置いた個体を、じっくり待って釣り上げる限定魚。"
+      - "しばらく糸を垂らして待っていると、浮きに近寄ってくることがある。"
+    item:
+      material: PAPER
+      custom-model-data: 10007
+    entity: TROPICAL_FISH
+    # 熱帯魚の模様・色を指定（省略可。全部省略するとバニラのランダムな見た目のまま）
+    # pattern: KOB / SUNSTREAK / SNOOPER / DASHER / BRINELY / SPOTTY / FLOPPER /
+    #          STRIPEY / GLITTER / BLOCKFISH / BETTY / CLAYFISH
+    # body-color / pattern-color: 染料の色名（WHITE, ORANGE, RED, YELLOW, LIME, ... 等）
+    tropical-fish:
+      pattern: FLOPPER
+      body-color: WHITE
+      pattern-color: RED
+    escape-chance: 0.35
+    # 限定魚らしく、ベースから「めずらしい」にしておく
+    base-rarity: R
+    base-scale: 1.0
+    # 例: 人気種なので、共通設定より少し待ち時間を長く・当たりにくくする
+    approach:
+      patience-seconds: 20.0
+      trigger-chance: 0.20
+
+  iwana:
+    name: "イワナ"
+    category: FISH
+    size-min: 15.0
+    size-max: 45.0
+    base-price: 900
+    habitat: "渓流・一年中（/mushitori spawn iwana で設置）"
+    description:
+      - "警戒心が強い渓流魚。管理者が置いた個体を、粘り強く待って狙う。"
+    item:
+      material: PAPER
+      custom-model-data: 10008
+    entity: SALMON
+    escape-chance: 0.3
+    base-rarity: N
+    base-scale: 1.0
+    # approach を省略 → config.yml の共通設定（fishing.approach）がそのまま使われる

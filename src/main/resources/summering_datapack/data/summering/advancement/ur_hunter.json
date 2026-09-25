@@ -1,0 +1,23 @@
+{
+  "parent": "summering:first_catch",
+  "display": {
+    "icon": {
+      "id": "minecraft:amethyst_shard"
+    },
+    "title": {
+      "text": "ウルトラレアハンター"
+    },
+    "description": {
+      "text": "UR のいきものを捕まえる"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "unlocked": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

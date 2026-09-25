@@ -1,0 +1,23 @@
+{
+  "parent": "summering:first_catch",
+  "display": {
+    "icon": {
+      "id": "minecraft:light_blue_dye"
+    },
+    "title": {
+      "text": "さかな コンプリート"
+    },
+    "description": {
+      "text": "さかな をすべて登録する"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "unlocked": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

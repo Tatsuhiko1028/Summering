@@ -1,0 +1,12 @@
+{
+  "_readme": "捕獲・釣り関連の通知文言です。{creature}=生物名、{size}=サイズ表記(例: 12.3 cm)、{count}=匹数、に置き換わります。レア度はあえて表示していません（アイテムの説明文や図鑑で確認する設計のため）。編集後は /mushitori reload で反映されます。",
+
+  "net.catch.single": "{creature} を捕まえた！  {size}",
+  "net.catch.multiple": "{count} 匹のいきものを捕まえた！",
+
+  "fishing.rod.catch": "{creature} が釣れた！  {size}",
+  "fishing.rod.escape": "あと一歩のところで、魚に逃げられた…",
+
+  "fishing.approach.catch": "{creature} を釣り上げた！  {size}",
+  "fishing.approach.escape": "あと一歩のところで、{creature} に逃げられた…"
+}

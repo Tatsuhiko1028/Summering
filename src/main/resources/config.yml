@@ -1,0 +1,556 @@
+# =========================================================
+#  Mushitori 設定
+#  変更後は /mushitori reload で反映されます
+# =========================================================
+
+money:
+  # 所持金は、プレイヤーの持ち物にある紙幣・硬貨アイテムの組み合わせで管理します
+  # （スコアボードではありません）。以前は「コイン」アイテム1つのスタック数で
+  # 表現していましたが、バニラのアイテムスタック数には1〜99という上限があり、
+  # 大きな金額を渡そうとするとエラーになる不具合があったため、複数の額面
+  # （紙幣・硬貨）を組み合わせて渡す方式に変更しました。
+  #
+  # 渡すときは、額面の大きいものから順に、できるだけ少ない枚数になるよう
+  # 自動で組み合わせます（例：1211円 → 1000円札1枚、100円玉2枚、10円玉1枚、
+  # 1円玉1枚）。1円玉（額面1）を必ず含めておくと、どんな金額でも端数なく
+  # ちょうど渡せます。
+  unit: "円"
+  # type: （任意）BILL（紙幣）または COIN（硬貨）。省略時は、額面が1000以上ならBILL、
+  #       未満ならCOINとみなします。小銭入れ・財布に入れられるかどうかの判定に使います。
+  denominations:
+    10000:
+      name: "1万円札"
+      material: PAPER
+      custom-model-data: 40001
+    5000:
+      name: "5000円札"
+      material: PAPER
+      custom-model-data: 40002
+    1000:
+      name: "1000円札"
+      material: PAPER
+      custom-model-data: 40003
+    500:
+      name: "500円玉"
+      material: GOLD_NUGGET
+      custom-model-data: 40004
+    100:
+      name: "100円玉"
+      material: IRON_NUGGET
+      custom-model-data: 40005
+    50:
+      name: "50円玉"
+      material: IRON_NUGGET
+      custom-model-data: 40006
+    10:
+      name: "10円玉"
+      material: COPPER_INGOT
+      custom-model-data: 40007
+    5:
+      name: "5円玉"
+      material: COPPER_INGOT
+      custom-model-data: 40008
+    1:
+      name: "1円玉"
+      material: COPPER_INGOT
+      custom-model-data: 40009
+
+guide:
+  # 図鑑アイテム以外に、素の本（BOOK）でも図鑑を開けるようにするか
+  accept-vanilla-book: true
+  # 図鑑アイテムの見た目。KNOWLEDGE_BOOK はバニラ側で特殊な用途がほぼ無く、
+  # 誤操作（署名・執筆中の本を開く等）が起きにくいためおすすめです
+  material: KNOWLEDGE_BOOK
+  # 見た目の切り替え用（custom_model_data）。使わない場合は省略可
+  custom-model-data: 20031
+  name: "むしとり図鑑"
+
+register:
+  # 他人が捕まえたアイテムでも自分の図鑑に登録できるか
+  allow-others-catch: true
+  # 1つのアイテムを登録できるのは1回だけ（推奨: true）
+  once-per-item: true
+
+# 捕獲全般（虫取り網・釣りの両方）に関わる設定
+catching:
+  # creatures.yml で escape-chance を省略した生物に使う、基準の逃げやすさ（0.0〜1.0）。
+  # 実際の逃走確率は「生物の escape-chance ＋ 道具（網・竿）の escape-modifier」で決まります。
+  # 0にすると絶対に逃げず、1にすると絶対に逃げます。
+  default-escape-chance: 0.2
+  # creatures.yml で base-rarity を省略した生物に使う既定のベースレア度
+  default-base-rarity: N
+  # creatures.yml で size-rarity-template を省略した生物に使う既定のテンプレート名
+  # （下の size-rarity-templates のキーのどれかを指定してください）
+  default-size-rarity-template: default
+  # 見た目のスケール（Attribute.SCALE）。湧かせた瞬間に、その個体のサイズ段階から
+  # 実測cm相当の値を1つ抽選し、次の式で決まります（湧かせた瞬間に固定されます）：
+  #   比率 = 実測cm ÷ 平均サイズ（平均サイズ = (size-min + size-max) ÷ 2）
+  #   scale = 比率（clamp-min〜clamp-maxの範囲に丸めたもの） × base-scale（creatures.yml、生物ごとの基準値）
+  # 例: size-min=7, size-max=12, base-scale=0.7 の生物が「ふつう」あたり（実測cm≒9.5）
+  #     になった場合、9.5 / 9.5 × 0.7 = 0.7 程度になります。
+  # さらに、「最もおおきい」段階のときは extreme-max-multiplier を、「最もちいさい」段階
+  # のときは extreme-min-multiplier を最後に掛けて、特徴を強調します。
+  # 注意: entityの種類によっては、そもそも Attribute.SCALE を持たず、変化しないことがあります
+  #       （debug: true にすると、湧かせるたびに適用結果をログに出します）。
+  scale:
+    enabled: true
+    # 「最もちいさい」「最もおおきい」段階のときだけ、size-min/size-maxそのものではなく
+    # ここで指定した範囲からその都度ランダムに選んだ倍率を掛けた値を実測cmとして使います
+    # （例: 1.05〜1.2の範囲なら、size-maxの1.05〜1.2倍のどこかが「最もおおきい」の
+    # 実測cmになります。小数点以下も含めて毎回細かくランダムに決まります）。
+    # 「最も〜」を、定義上のふつうの範囲を少し超える特別な記録級の個体として扱う
+    # イメージです。見た目のscaleは、この補正後の実測cmから計算されるため、
+    # ここでの数値がそのままscaleの見た目にも反映されます（scale側で別途倍率をかける処理は
+    # ありません＝二重に補正がかかることはありません）。
+    # ※ min/maxを同じ値にしても、ランダム性が完全に消えないよう、内部で最低限の幅
+    #   （±1%程度）を確保するようにしています。
+    extreme-max-multiplier-min: 1.05
+    extreme-max-multiplier-max: 1.2
+    extreme-min-multiplier-min: 0.8
+    extreme-min-multiplier-max: 0.95
+    # 「比率」（実測cm÷平均サイズ。同じ種の中での個体差）だけをこの範囲に丸めます。
+    # size-min/size-maxの幅が広い生物（鮭系の魚など）で、個体差が極端になりすぎるのを
+    # 防ぐためのものです。【重要】base-scaleを掛けた後の最終結果はここでは丸めません
+    # （比率だけをクランプしてからbase-scaleを掛けるので、base-scaleを極端な値に
+    # 設定した場合もそのまま反映されます。base-scaleが小さい生物でも、個体差の比率
+    # そのものは潰れないため、見た目のサイズ差がちゃんと出ます）。
+    clamp-min: 0.5
+    clamp-max: 1.6
+  # true にすると、scale適用などcatching周りの内部処理をコンソールログに出します（動作確認用）
+  debug: false
+  # true にすると、個体が実在する捕獲経路（虫取り網・寄ってくる釣り）では、
+  # 道具の大物ボーナスを一切効かせなくなります。湧いた瞬間に決まる見た目のサイズと、
+  # 捕まえたときの数値を厳密に一致させたい場合はこちらを true にしてください。
+  # バニラ釣り（個体が存在しない通常釣り）は、この設定に関係なく引き続き大物ボーナスが
+  # 効きます（そもそも見た目が無いため）。既定は false（従来通り、実在する個体にも
+  # 大物ボーナスが効きます＝良い道具を使うほど、見た目以上のサイズが出ることがあります）。
+  strict-visual-consistency: false
+  # 売値の「同じサイズ段階の中でも、より極端な実測cmほど高く売れる」補正の強さ。
+  # 0なら無効（従来通り、段階のprice-multだけで価格が決まります）。0.5なら、段階内で
+  # 最も極端な個体（size-min/size-maxちょうど）は、中心（ふつう寄り）の個体よりおよそ
+  # 1.5倍高く売れます。段階そのものが変わるような大きな差ではなく、既存のサイズ段階の
+  # price-multに、なめらかに上乗せされる形です。
+  size-continuous-price-bonus: 0.5
+
+# サイズ→レア度の繰り上げルールの「テンプレート」。複数定義しておいて、
+# creatures.yml の各生物で size-rarity-template: <名前> と指定して選べます
+# （省略時は catching.default-size-rarity-template が使われます）。
+#
+# steps: サイズ段階が「ふつう」から何マス離れているか（1=ちいさい/おおきい、2=とても〜、
+#        3=最も〜）に応じて、ベースレア度から何段階繰り上げるか
+# top-tier-min-base: 最高レア度（一覧の一番最後の項目）に到達できるのは、
+#        ベースレア度がこのキー「以上」の生物だけです
+# top-tier-requires-max-distance: true の場合、上記に加えて「最も〜」（中心から
+#        最も離れた段階）のときだけ最高レア度に到達できます。それ以外（条件を満たさない
+#        場合）は、計算上は最高レア度に届いても、ひとつ下の段階に留まります。
+size-rarity-templates:
+  default:
+    steps:
+      0: 0
+      1: 0
+      2: 1
+      3: 1
+      4: 2
+    top-tier-min-base: R
+    top-tier-requires-max-distance: true
+  # 例: 繰り上げが穏やかなテンプレート（雑魚寄りの生物向け）
+  gentle:
+    steps:
+      0: 0
+      1: 0
+      2: 0
+      3: 0
+      4: 1
+    top-tier-min-base: SR
+    top-tier-requires-max-distance: true
+
+# レア度テーブル。名前・価格倍率・色の定義に使います。
+# ※ weight / size-bias は現在の仕組み（生物ごとの固定ベースレア度＋サイズによる繰り上げ）
+#   では使われていません（将来のため残してあります）。並び順（低レア→高レア）だけが重要です。
+# color: 使える値は black, dark_blue, dark_green, dark_aqua, dark_red, dark_purple, gold,
+#        gray, dark_gray, blue, green, aqua, red, light_purple, yellow, white の16種類のみです
+#        （"light_gray" 等、この一覧にない名前は解釈できず白にフォールバックします）。
+rarities:
+  N:
+    name: "いつもの"
+    weight: 65
+    price-mult: 1.0
+    size-bias: 0.0
+    color: gray
+  R:
+    name: "めずらしい"
+    weight: 25
+    price-mult: 1.5
+    size-bias: 0.15
+    color: aqua
+  SR:
+    name: "とてもめずらしい"
+    weight: 7
+    price-mult: 5.0
+    size-bias: 0.30
+    color: yellow
+  SSR:
+    name: "すごくめずらしい"
+    weight: 2
+    price-mult: 20.0
+    size-bias: 0.40
+    color: light_purple
+  UR:
+    name: "でんせつ"
+    weight: 1
+    price-mult: 100.0
+    size-bias: 0.50
+    color: gold
+
+# サイズ段階。小さい→大きい の順で好きな段数を定義してください（既定は9段階）
+# （道具の大物ボーナスは、必ず「次（＝より大きい）」方向へ1段階引き上げます）。
+# weight の比率で抽選され、price-mult が売値に掛かります。
+# 例の重みだと、出現確率は ふつう ＞ ちいさい＝おおきい ＞ とてもちいさい＝とてもおおきい
+# ＞ すごくちいさい＝すごくおおきい ＞ 最もちいさい＝最もおおきい の順になります。
+# ※ size-rarity-templates の steps は「中心（ふつう）からの距離」で指定します。
+#   段数を変えた場合は、最大距離（段数÷2の整数部分）に合わせて steps を調整してください。
+# ※ 最初（最もちいさい）・最後（最もおおきい）の段階の実測cmは、size-min/size-max
+#   そのものではなく、catching.scale の extreme-min/max-multiplier-min/max の範囲から
+#   その都度ランダムに選んだ倍率を掛けた値になります（既定でおおよそ0.80〜0.95倍／
+#   1.05〜1.2倍）。「最も〜」は定義上のふつうの範囲を少し超える、特別な記録級の
+#   個体として扱う考え方です。
+# ※ legendary-name（任意）：この段階のときの見た目の名前を、通常は name のままにしつつ、
+#   最終的なレア度が「でんせつ」（最高レア度）にもなった場合だけ、こちらに差し替えます
+#   （例: 「最もおおきい」→「規格外におおきい」）。
+sizes:
+  mottomo_chiisai:
+    name: "最もちいさい"
+    # そのレア度がでんせつ（最高レア度）にもなった場合だけ、表示名がこちらに差し替わります
+    legendary-name: "規格外にちいさい"
+    weight: 0.1
+    price-mult: 4.0
+  sugoku_chiisai:
+    name: "すごくちいさい"
+    weight: 1
+    price-mult: 3.0
+  totemo_chiisai:
+    name: "とてもちいさい"
+    weight: 5
+    price-mult: 2.0
+  chiisai:
+    name: "ちいさい"
+    weight: 18
+    price-mult: 1.3
+  futsuu:
+    name: "ふつう"
+    weight: 50
+    price-mult: 1.0
+  ookii:
+    name: "おおきい"
+    weight: 18
+    price-mult: 1.3
+  totemo_ookii:
+    name: "とてもおおきい"
+    weight: 5
+    price-mult: 2.0
+  sugoku_ookii:
+    name: "すごくおおきい"
+    weight: 1
+    price-mult: 3.0
+  mottomo_ookii:
+    name: "最もおおきい"
+    legendary-name: "規格外におおきい"
+    weight: 0.1
+    price-mult: 4.0
+
+# サイズ分布テンプレート（任意）。マーカーごとに、上のsizesセクションの重みとは
+# 別の重みを使いたい場合に定義します。tierキー（mottomo_chiisai等）ごとにweightだけを
+# 上書きします（name・price-mult・legendary-nameは上のsizesセクションのものを
+# そのまま使います）。一部のtierだけ書けば、書かなかったtierは上のsizesセクションの
+# 重みのままになります。マーカー設定画面（MarkerGui）で、どのテンプレートを使うか
+# 選べます（未選択なら、上のsizesセクションの重みがそのまま使われます）。
+size-distribution-templates:
+  # 例：大物イベント用。ふつう・ちいさい系統を減らし、おおきい系統を大幅に増やす
+  big_event:
+    mottomo_chiisai: 0.05
+    sugoku_chiisai: 0.5
+    totemo_chiisai: 2
+    chiisai: 8
+    futsuu: 25
+    ookii: 25
+    totemo_ookii: 15
+    sugoku_ookii: 10
+    mottomo_ookii: 5
+  # 例：ちいさい個体だけの特別なマーカー用
+  tiny_only:
+    mottomo_chiisai: 5
+    sugoku_chiisai: 20
+    totemo_chiisai: 40
+    chiisai: 30
+    futsuu: 5
+    ookii: 0
+    totemo_ookii: 0
+    sugoku_ookii: 0
+    mottomo_ookii: 0
+
+# 虫取り網の使用感（右クリックで捕獲）
+net-catching:
+  # 前方どこまでの範囲を「振った」判定にするか（ブロック）
+  range: 3.0
+  # 正面から何度まで巻き込むか（片側の角度。実際は左右この角度ぶん）
+  angle-degrees: 50
+  # 同時に巻き込める最大数
+  max-targets: 8
+  # 振ったときの効果音（バシュッ）
+  sound-swing: ENTITY_PLAYER_ATTACK_SWEEP
+  sound-swing-volume: 0.8
+  sound-swing-pitch: 1.3
+  # 捕まえられたときの効果音（チリン）
+  sound-catch: ENTITY_EXPERIENCE_ORB_PICKUP
+  sound-catch-volume: 0.7
+  sound-catch-pitch: 1.2
+  # 壊れたときの効果音
+  sound-break: ENTITY_ITEM_BREAK
+  # 逃げられたときの効果音（「スカッ」というような、空振り寄りの軽い音を想定）
+  sound-escape: ENTITY_PLAYER_ATTACK_NODAMAGE
+  # 連打対策のクールダウン（ミリ秒）
+  cooldown-ms: 250
+  # 逃げられたとき、煙とともにテレポートする範囲（ブロック）
+  escape-teleport-radius: 7.0
+  # true にすると、網を持っているときの右クリックイベントをコンソールログに出します
+  # （空中クリックが反応しない場合の原因切り分け用）
+  debug: false
+
+# 虫かご。手持ちの状態で右クリックするとGUIが開き、虫を出し入れできます
+# （虫以外は入れられません）。他のプレイヤーにそのまま渡すこともできます。
+# capacity: 収納できる数。GUIは9マス単位（1〜3段）で表示されるため、9の倍数
+#           （9, 18, 27...）にしておくと、余りのスロットが出ずすっきりします。
+#           9の倍数でなくてもOKですが、その場合は9の倍数に切り上げた分だけ
+#           使用不可のスロットが表示されます。
+# いきものをお金に変えてくれるトレーダーNPC（村人ベース）。
+# /mushitori trader spawn でその場に設置できます。右クリックすると売却確認画面が開き、
+# 確定すると手持ちのいきもの全部（/mushitori sell と同じ対象・同じ金額計算）を売ります。
+trader:
+  name: "いきものトレーダー"
+  # バニラの村人の職業（見た目・作業台の種類に影響）。省略可
+  profession: LIBRARIAN
+
+cages:
+  small_cage:
+    name: "小さな虫かご"
+    material: GLASS_BOTTLE
+    custom-model-data: 20021
+    capacity: 9
+    price: 500
+  cage:
+    name: "虫かご"
+    material: GLASS_BOTTLE
+    custom-model-data: 20022
+    capacity: 18
+    price: 2000
+  large_cage:
+    name: "大きな虫かご"
+    material: GLASS_BOTTLE
+    custom-model-data: 20023
+    capacity: 27
+    price: 8000
+
+# 小銭入れ・財布。虫かごと同じ考え方の、お金専用の入れ物です。
+# filter: coins-only（硬貨のみ）または any-money（紙幣・硬貨どちらでも）
+purses:
+  coin_purse:
+    name: "小銭入れ"
+    material: LEATHER
+    custom-model-data: 20031
+    capacity: 7
+    price: 300
+    filter: coins-only
+  wallet:
+    name: "財布"
+    material: LEATHER
+    custom-model-data: 20032
+    capacity: 14
+    price: 1500
+    filter: any-money
+
+fishing:
+  # 通常の釣り（バニラの釣り）で FISH カテゴリの魚が釣れるようにする
+  enabled: true
+  # バニラの魚アイテムを図鑑の魚に置き換える
+  replace-vanilla-catch: true
+  # 逃げられたときの効果音（通常釣り・寄ってくる釣り共通。「ジュポン」というような
+  # 水の音を想定）
+  sound-escape: ENTITY_GENERIC_SPLASH
+
+  # ---- 試験実装: 魚が浮きに直接寄ってくる釣り ----
+  # 通常の釣りは難易度が低く、いろいろな種類の低レア度の魚が出やすい
+  # 「ベター」な選択肢。こちらは難易度が高い代わりに、良いもの・限定の魚が釣れる、
+  # という棲み分けを想定しています。
+  #
+  # 対象は、あらかじめ /mushitori spawn 等でワールドに置いた（creature_idタグ付きの）
+  # 魚（FISH）の個体のみです。浮きを投げた瞬間に新しく自動で湧く、ということは
+  # しません。捕まえると個体自体がいなくなるため、数が少ない・限定という感覚は
+  # 「管理者が置いた分しかいない」ことで自然に表現されます。
+  #
+  # creatures.yml側の各個体に approach セクションを書くと、この設定を個体ごとに
+  # 上書きできます（例は creatures.yml を参照）。
+  approach:
+    enabled: true
+    # true にすると、判定の様子をコンソールログに出します（動作確認用）
+    debug: false
+
+    # 浮きの近くに対象個体がいるか確認する範囲（ブロック）
+    notice-radius: 8.0
+    # この秒数、糸を垂らして待つと「反応するかどうか」の判定が始まる
+    patience-seconds: 15.0
+    # 判定に外れた場合、何秒おきに再判定するか（待てば待つほどチャンスがある）
+    retry-interval-seconds: 5.0
+    # 1回の判定で、対象個体それぞれが独立に寄ってくるかどうかの確率
+    # （近くに複数匹いる場合、1匹ずつこの確率で判定するので、数が多いほど反応しやすくなります）
+    trigger-chance: 0.25
+
+    # 判定に成功してから、実際に浮きにたどり着くまでの時間（秒）。この範囲でランダム
+    min-approach-seconds: 2.5
+    max-approach-seconds: 5.0
+    # 「浮きに完全に密着した」とみなす距離（ブロック）。小さいほどシビアな判定になります
+    arrival-distance: 0.35
+    # 目標地点を、浮きから少し下（水面下）にずらす距離（ブロック）。
+    # 0にすると浮きそのものを目標にし、水面から顔を出してしまうことがあります
+    approach-depth-offset: 0.4
+    # 浮きに着いてから、竿を振れば釣れる猶予時間（秒）。過ぎると魚は逃げる
+    window-seconds: 1.2
+    # 動きの更新間隔（tick）。小さいほど滑らかだが負荷は上がる
+    update-interval-ticks: 4
+
+    # 通常釣りより有利になるよう、竿の大物ボーナスに追加で乗るボーナス
+    # （サイズが良くなるぶん、間接的にレア度にも良い影響があります）
+    # （0にすると、竿の性能だけが効く＝通常釣りと同条件になります）
+    extra-size-bonus: 0.10
+
+    # 逃げられた個体が、もう一度「寄ってくる」判定の対象に戻るまでのクールダウン（秒）
+    escape-cooldown-seconds: 20.0
+
+    # 浮きに完全に密着した瞬間（＝振るタイミングの合図）に鳴る効果音
+    sound-window-start: ENTITY_FISHING_BOBBER_SPLASH
+    # 捕まえたときの効果音
+    sound-catch: ENTITY_EXPERIENCE_ORB_PICKUP
+
+    # 猶予時間を過ぎて釣れなかった、または早すぎるタイミングで竿を振ってしまった等、
+    # 逃げられたときの後始末（どちらも煙のエフェクトが出ます）
+    escape:
+      # RELOCATE      … 煙とともに、近くの「水の中」へ瞬間移動する（個体は消えない。既定）
+      #                 水が見つからない場合はその場に留まります（水以外へは移動しません）
+      # SMOKE_DESPAWN … 煙とともにその場から消滅させる（管理者が置き直すまでいなくなる）
+      mode: RELOCATE
+      # RELOCATE のとき、水中を探す範囲（ブロック）
+      relocate-radius: 9.0
+
+# ---- 【試験実装】マーカーによる自動湧き（アンビエントスポーン） ----
+# /mushitori marker add <いきものID> で、その場にマーカーを設置します
+# （設置内容は spawn_markers.yml に保存されます）。
+ambient-spawn:
+  enabled: true
+  # true にすると、湧いた・デスポーンした・クールダウン中で見送った等をログに出します
+  debug: false
+
+  # ここから下は、新規マーカーを設置した瞬間にコピーされる「既定値」です。
+  # 設置後は、マーカーごとに個別に持つ値になります（/mushitori give wand の設定棒で、
+  # マーカーを右クリックすると開く設定画面から、マーカーごとに変更できます）。
+
+  # この範囲にプレイヤーが近づくと、湧くかどうかの判定が始まります（ブロック）
+  trigger-radius: 15.0
+  # 湧いた後、この範囲に誰もいなくなるとデスポーンします（ブロック）
+  despawn-radius: 20.0
+  # 実際に湧く位置を、マーカーの中心からこの範囲内でランダムに決めます（ブロック）。
+  # 0にすると常に中心ちょうどに湧きます。湧いた個体は、この範囲（の少し外側）を
+  # 超えて離れると、テレポートではなく自然に歩いて範囲内へ戻ろうとします。
+  spawn-radius: 5.0
+  # 範囲内へ戻るときの歩く速さ（バニラのMob移動速度に対する倍率。既定1.0）
+  leash-walk-speed: 1.0
+  # マーカー設定画面で、生物枠（何の生物をどれだけの重みで湧かせるか）を表す
+  # アイコンの素材。既定はウサギの皮（RABBIT_HIDE）。custom-model-dataを
+  # 指定すると、リソースパック側で見た目を差し替えられます（未指定なら
+  # そのままの見た目です）
+  creature-slot-material: RABBIT_HIDE
+  # creature-slot-custom-model-data: 1
+  # この場所から同時に「引き出せる」上限数（下記の判定方法を参照）
+  max-count: 1
+  # 一度の巡回でまとめて湧かせる最大数。max-countとは別に「一気に何匹まで増えるか」を
+  # 制限します。この枠それぞれについて独立にspawn-chanceを判定するため、例えば
+  # simultaneous-maxが2・spawn-chanceが50%なら、その巡回で0〜2匹のどれかが湧きます。
+  # 1のままなら、これまで通り1匹ずつ増えます。
+  simultaneous-max: 1
+  # 湧くかどうかを確認する間隔（秒）＝実質的な「湧く頻度」
+  spawn-interval-seconds: 5.0
+  # 上記の間隔ごとに、実際に湧くかどうかの確率（0.0〜1.0）。外れた場合は、
+  # 次の間隔でまた判定します。1.0にすると条件を満たすたび必ず湧きます
+  spawn-chance: 1.0
+  # 直近何秒以内の捕獲を、まだ「消費した枠」としてカウントするか。
+  # 最大数の判定は「現在の生存数 ＋ 直近この秒数以内に捕まえられた数」が
+  # max-count を下回っているかどうかで行います（下回っていれば spawn-interval-seconds
+  # おきに1体ずつ補充されます＝捕まえた分だけ、また少しずつ湧いてくるイメージです）。
+  catch-window-seconds: 300.0
+
+  # マーカー設置時（/mushitori marker addpreset、または設定棒の設定画面の「プリセットを
+  # 適用」）に使える、複数種類＋最大数のテンプレートです。適用後はマーカー自身の値になり、
+  # 個別に上書きできます。
+  # 例: キアゲハが7割、ナミアゲハが2割、カブトムシが1割の比率で出るプリセット
+  # （weight は比率です。合計が100である必要はありません）
+  presets:
+    forest_bugs:
+      creatures:
+        - {id: yellow_fly, weight: 7}
+        - {id: fly, weight: 2}
+        - {id: kabutomushi, weight: 1}
+      max-count: 3
+    coastal_fish:
+      creatures:
+        - {id: madai, weight: 1}
+        - {id: ajimaru, weight: 3}
+      max-count: 2
+
+  # マーカー設定棒（/mushitori give wand）の見た目
+  wand:
+    material: BLAZE_ROD
+    name: "マーカー設定棒"
+
+# ---- 実績とMinecraft本体の「進捗」を連携する ----
+advancements:
+  # 図鑑の実績をバニラの進捗タブにも表示する
+  enabled: true
+  # 進捗データパックの名前（world/datapacks/ 以下のフォルダ名）
+  pack-name: summering_advancements
+
+# 「自慢」機能。スニーク（Shift）を一定時間押し続けたまま、そのままアイテムを
+# 捨てる動作（Q）をすると、実際には手放さずに、捕まえたそのままのサイズ・見た目で
+# 目の前にいきものを表示します（名前・サイズ・レア度を表示）。動くと消えます。
+# 虫取り網で捕まえたり、攻撃で倒したりすることはできません。
+# 「自慢」機能。スニーク（Shift）を一定時間押し続けたまま右クリックすると、
+# 実際には何も手放さずに、捕まえたそのままのサイズ・見た目で近くにいきものを
+# 表示します（名前・サイズ・レア度・捕まえた日時を段組みで表示）。
+# 正面に地面や壁がある場合はその手前に、何もない場合は体の向きだけを使った
+# 水平方向・指定距離の位置に表示します。向きは、表示したプレイヤー自身の方を
+# 向くのではなく、プレイヤーが見ていたのと同じ方向（＝プレイヤーに背を向ける形）にします。
+showcase:
+  # これだけスニークし続ければ「自慢」の構えが成立したとみなす（秒）
+  # 構え成立後は、スニークを押し続けている限りリセットされないため、連続で
+  # 右クリックすればそのまま連続で表示できます（1人あたり最大5体まで）。
+  hold-seconds: 1.0
+  # 正面に何も無い（空中を見ている）場合、どれだけ離れた位置に表示するか（ブロック）
+  distance: 1.5
+  # 正面に地面・壁が無いかを探す距離（ブロック）。基本は distance と同じでOK
+  wall-check-distance: 1.5
+  # 空中に表示するとき、見上げていたら底上げする高さ（ブロック）。見上げている
+  # 角度には比例させず、この固定値だけ底上げします（角度をそのまま反映すると、
+  # 急な角度のときに高く出過ぎてしまうため）
+  look-up-lift: 1.0
+  # 表示した個体から、これ以上離れたら消す（ブロック）
+  despawn-distance: 2.0
+  # 誰も動かなくても、これだけ経てば自動的に消す（秒）
+  max-duration-seconds: 30.0
+
+# 「アイテムを渡す」機能。スニーク（Shift）＋右クリックでプレイヤーに使用すると、
+# 相手のメインハンドが空いていれば、そのまま手渡せます（バニラのアイテムも含めて、
+# どんなアイテムでも対象です）。相手が既に何か持っている場合は失敗の効果音を鳴らします。
+# 「自慢」機能と同じ「シフト」がきっかけになるため、自慢の構え中・表示中はこちらより
+# 自慢を優先します（何も起きません）。
+player-give:
+  # 手渡しに成功したときの効果音
+  sound-success: ENTITY_ITEM_PICKUP
+  # 相手が既に何か持っていて、渡せなかったときの効果音（「ポロン」のような軽い音を想定）
+  sound-fail: BLOCK_NOTE_BLOCK_PLING

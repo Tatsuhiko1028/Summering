@@ -1,0 +1,23 @@
+{
+  "parent": "summering:first_catch",
+  "display": {
+    "icon": {
+      "id": "minecraft:gold_ingot"
+    },
+    "title": {
+      "text": "むしとり名人"
+    },
+    "description": {
+      "text": "のべ100匹を図鑑に登録する"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "unlocked": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

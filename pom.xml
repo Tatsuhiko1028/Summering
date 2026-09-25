@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>jp.mushitori</groupId>
+  <artifactId>Mushitori</artifactId>
+  <version>0.1.0</version>
+  <packaging>jar</packaging>
+  <name>Mushitori</name>
+  <description>虫取り・釣りゲームの図鑑システム</description>
+
+  <properties>
+    <java.version>25</java.version>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <!--
+      Paper のバージョンを上げるときはここだけ変える。
+      26.x系からバージョン表記が build 番号方式に変わったため、
+      1.21.x時代のような "26.2-R0.1-SNAPSHOT" は存在しない。
+      "[26.2.build,)" は「26.2系の最新ビルドを使う」という意味のレンジ指定。
+    -->
+    <paper.version>[26.2.build,)</paper.version>
+  </properties>
+
+  <repositories>
+    <repository>
+      <id>papermc</id>
+      <url>https://repo.papermc.io/repository/maven-public/</url>
+    </repository>
+  </repositories>
+
+  <dependencies>
+    <dependency>
+      <groupId>io.papermc.paper</groupId>
+      <artifactId>paper-api</artifactId>
+      <version>${paper.version}</version>
+      <scope>provided</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <defaultGoal>clean package</defaultGoal>
+    <finalName>${project.artifactId}-${project.version}</finalName>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+        <configuration>
+          <release>${java.version}</release>
+        </configuration>
+      </plugin>
+    </plugins>
+    <!--
+      src/main/resources の中身（plugin.yml, config.yml, creatures.yml）は
+      Maven のデフォルト設定でそのまま jar のルートに入る。
+      以前は plugin.yml だけ変数展開（${project.version}）するために
+      filtering を分けていたが、環境によって不安定だったため、
+      plugin.yml 側の version は固定値に変更してこの仕組みは撤去した。
+    -->
+  </build>
+</project>

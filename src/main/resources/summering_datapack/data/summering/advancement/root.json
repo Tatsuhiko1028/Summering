@@ -1,0 +1,23 @@
+{
+  "display": {
+    "icon": {
+      "id": "minecraft:book"
+    },
+    "title": {
+      "text": "むしとり図鑑"
+    },
+    "description": {
+      "text": "虫取り・釣りの実績をここでも確認できます"
+    },
+    "background": "minecraft:textures/block/bookshelf.png",
+    "frame": "task",
+    "show_toast": false,
+    "announce_to_chat": false,
+    "hidden": false
+  },
+  "criteria": {
+    "unlocked": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+name: Mushitori
+version: '0.38.0'
+main: jp.mushitori.MushitoriPlugin
+api-version: '26.2'
+description: 虫取り・釣りゲームの図鑑システム
+
+commands:
+  mushitori:
+    aliases: [ mt, zukan ]
+    description: 図鑑を開く / 管理コマンド
+    usage: /mushitori [dex|sell|give|spawn|catch|money|reload]
+
+permissions:
+  mushitori.use:
+    description: 図鑑を開く・売る
+    default: true
+  mushitori.admin:
+    description: give / spawn / catch / money / reload
+    default: op

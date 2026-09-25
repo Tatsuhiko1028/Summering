@@ -1,0 +1,23 @@
+{
+  "parent": "summering:complete_fish",
+  "display": {
+    "icon": {
+      "id": "minecraft:nether_star"
+    },
+    "title": {
+      "text": "図鑑マスター"
+    },
+    "description": {
+      "text": "すべてのいきものを登録する"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "unlocked": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

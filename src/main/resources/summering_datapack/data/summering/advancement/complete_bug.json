@@ -1,0 +1,23 @@
+{
+  "parent": "summering:first_catch",
+  "display": {
+    "icon": {
+      "id": "minecraft:lime_dye"
+    },
+    "title": {
+      "text": "むし コンプリート"
+    },
+    "description": {
+      "text": "むし をすべて登録する"
+    },
+    "frame": "goal",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "unlocked": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

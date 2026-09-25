@@ -1,0 +1,23 @@
+{
+  "parent": "summering:root",
+  "display": {
+    "icon": {
+      "id": "minecraft:paper"
+    },
+    "title": {
+      "text": "はじめての一匹"
+    },
+    "description": {
+      "text": "なにか1種類を図鑑に登録する"
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "unlocked": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}
