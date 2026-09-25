@@ -474,12 +474,6 @@ ambient-spawn:
   fish-spawn-max-depth: 24
   # 範囲内へ戻るときの歩く速さ（バニラのMob移動速度に対する倍率。既定1.0）
   leash-walk-speed: 1.0
-  # マーカー設定画面で、生物枠（何の生物をどれだけの重みで湧かせるか）を表す
-  # アイコンの素材。既定はウサギの皮（RABBIT_HIDE）。custom-model-dataを
-  # 指定すると、リソースパック側で見た目を差し替えられます（未指定なら
-  # そのままの見た目です）
-  creature-slot-material: RABBIT_HIDE
-  # creature-slot-custom-model-data: 1
   # この場所から同時に「引き出せる」上限数（下記の判定方法を参照）
   max-count: 1
   # 一度の巡回でまとめて湧かせる最大数。max-countとは別に「一気に何匹まで増えるか」を

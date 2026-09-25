@@ -37,10 +37,10 @@ import java.util.List;
  *   <li>6行目：操作（全解除・戻る）</li>
  * </ul>
  *
- * <p>数値・タグ・テンプレート名などの「文字で入力する」項目はクリックしてからチャットに
- * 入力する形にし、アイコンは全て{@code WRITABLE_BOOK}（本と羽ペん）に統一、上書きが
- * 設定されているときだけエンチャント光沢を付けています。true/falseの項目はクリックで
- * そのまま切り替え（上書き無し → true → false → 上書き無し、の3段階で巡回）します。</p>
+ * <p>数値・タグなどの「文字で入力する」項目はクリックしてからチャットに入力する形にし、
+ * アイコンは項目の内容に合った素材を使い分け、上書きが設定されているときだけ
+ * エンチャント光沢を付けています。true/falseの項目はクリックでそのまま切り替え
+ * （上書き無し → true → false → 上書き無し、の3段階で巡回）します。</p>
  */
 public final class CreatureDetailGui implements InventoryHolder {
 
@@ -125,11 +125,11 @@ public final class CreatureDetailGui implements InventoryHolder {
         ApproachOverrides ao = wc.approachOverride();
         Creature creature = plugin.creatures().get(wc.creatureId());
 
-        inventory.setItem(SLOT_REQUIRED_TAGS, valueIcon("必要タグの上書き",
+        inventory.setItem(SLOT_REQUIRED_TAGS, valueIcon(Material.NAME_TAG, "必要タグの上書き",
                 wc.requiredTagsOverride().isEmpty() ? null : String.join(", ", wc.requiredTagsOverride()),
                 "クリックしてチャットにカンマ区切りで入力（例: event,special）"));
 
-        inventory.setItem(SLOT_SCALE, valueIcon("見た目のスケール上書き（base-scale）",
+        inventory.setItem(SLOT_SCALE, valueIcon(Material.ARMOR_STAND, "見た目のスケール上書き（base-scale）",
                 ov.scale() == null ? null : String.valueOf(ov.scale()),
                 "クリックしてチャットに数値を入力（例: 0.8）"));
 
@@ -139,19 +139,19 @@ public final class CreatureDetailGui implements InventoryHolder {
         inventory.setItem(SLOT_SUPPRESS_HOSTILITY,
                 boolIcon("敵対AIを無効化するか上書き（suppress-hostility）", ov.suppressHostility()));
 
-        inventory.setItem(SLOT_ESCAPE_CHANCE, valueIcon("基準の逃げやすさ上書き（escape-chance）",
+        inventory.setItem(SLOT_ESCAPE_CHANCE, valueIcon(Material.RABBIT_FOOT, "基準の逃げやすさ上書き（escape-chance）",
                 ov.escapeChance() == null ? null : String.valueOf(ov.escapeChance()),
                 "クリックしてチャットに0.0〜1.0の数値を入力（例: 0.3）"));
         inventory.setItem(SLOT_ESCAPE_DESPAWNS, boolIcon("逃げると完全に消える上書き（escape-despawns）", ov.escapeDespawns()));
 
         inventory.setItem(SLOT_FLEE_FROM_PLAYERS, boolIcon("近づくと逃げる上書き（flee-from-players）", ov.fleeFromPlayers()));
-        inventory.setItem(SLOT_FLEE_RADIUS, valueIcon("逃げ始める距離上書き（flee-radius）",
+        inventory.setItem(SLOT_FLEE_RADIUS, valueIcon(Material.SPYGLASS, "逃げ始める距離上書き（flee-radius）",
                 ov.fleeRadius() == null ? null : String.valueOf(ov.fleeRadius()),
                 "クリックしてチャットに数値（ブロック）を入力（例: 6）"));
-        inventory.setItem(SLOT_FLEE_SPEED, valueIcon("逃げる速さ上書き（flee-speed）",
+        inventory.setItem(SLOT_FLEE_SPEED, valueIcon(Material.SUGAR, "逃げる速さ上書き（flee-speed）",
                 ov.fleeSpeed() == null ? null : String.valueOf(ov.fleeSpeed()),
                 "クリックしてチャットに数値を入力（例: 1.2）"));
-        inventory.setItem(SLOT_MOVEMENT_SPEED_MULTIPLIER, valueIcon("移動速度倍率上書き（movement-speed-multiplier）",
+        inventory.setItem(SLOT_MOVEMENT_SPEED_MULTIPLIER, valueIcon(Material.FEATHER, "移動速度倍率上書き（movement-speed-multiplier）",
                 ov.movementSpeedMultiplier() == null ? null : String.valueOf(ov.movementSpeedMultiplier()),
                 "クリックしてチャットに数値を入力（例: 0.5でゆっくり）"));
 
@@ -166,22 +166,22 @@ public final class CreatureDetailGui implements InventoryHolder {
         inventory.setItem(SLOT_BASE_RARITY, baseRarityIcon(creature, ov.baseRarityKey()));
         inventory.setItem(SLOT_SCHOOLING, boolIcon("群れる上書き（schooling）", ov.schooling()));
 
-        inventory.setItem(SLOT_APPROACH_PATIENCE, valueIcon("アプローチ：反応判定までの待ち時間上書き（patience-seconds）",
+        inventory.setItem(SLOT_APPROACH_PATIENCE, valueIcon(Material.CLOCK, "アプローチ：反応判定までの待ち時間上書き（patience-seconds）",
                 ao.patienceSeconds() == null ? null : String.valueOf(ao.patienceSeconds()),
                 "クリックしてチャットに秒数を入力（例: 10）"));
-        inventory.setItem(SLOT_APPROACH_RETRY_INTERVAL, valueIcon("アプローチ：再判定間隔上書き（retry-interval-seconds）",
+        inventory.setItem(SLOT_APPROACH_RETRY_INTERVAL, valueIcon(Material.REPEATER, "アプローチ：再判定間隔上書き（retry-interval-seconds）",
                 ao.retryIntervalSeconds() == null ? null : String.valueOf(ao.retryIntervalSeconds()),
                 "クリックしてチャットに秒数を入力（例: 3）"));
-        inventory.setItem(SLOT_APPROACH_TRIGGER_CHANCE, valueIcon("アプローチ：反応確率上書き（trigger-chance）",
+        inventory.setItem(SLOT_APPROACH_TRIGGER_CHANCE, valueIcon(Material.TRIPWIRE_HOOK, "アプローチ：反応確率上書き（trigger-chance）",
                 ao.triggerChance() == null ? null : String.valueOf(ao.triggerChance()),
                 "クリックしてチャットに0.0〜1.0の数値を入力（例: 0.4）"));
-        inventory.setItem(SLOT_APPROACH_MIN_SECONDS, valueIcon("アプローチ：誘導時間（最短）上書き（min-approach-seconds）",
+        inventory.setItem(SLOT_APPROACH_MIN_SECONDS, valueIcon(Material.STRING, "アプローチ：誘導時間（最短）上書き（min-approach-seconds）",
                 ao.minApproachSeconds() == null ? null : String.valueOf(ao.minApproachSeconds()),
                 "クリックしてチャットに秒数を入力（例: 2）"));
-        inventory.setItem(SLOT_APPROACH_MAX_SECONDS, valueIcon("アプローチ：誘導時間（最長）上書き（max-approach-seconds）",
+        inventory.setItem(SLOT_APPROACH_MAX_SECONDS, valueIcon(Material.LEAD, "アプローチ：誘導時間（最長）上書き（max-approach-seconds）",
                 ao.maxApproachSeconds() == null ? null : String.valueOf(ao.maxApproachSeconds()),
                 "クリックしてチャットに秒数を入力（例: 4）"));
-        inventory.setItem(SLOT_APPROACH_WINDOW_SECONDS, valueIcon("アプローチ：竿を振るタイミング上書き（window-seconds）",
+        inventory.setItem(SLOT_APPROACH_WINDOW_SECONDS, valueIcon(Material.FISHING_ROD, "アプローチ：竿を振るタイミング上書き（window-seconds）",
                 ao.windowSeconds() == null ? null : String.valueOf(ao.windowSeconds()),
                 "クリックしてチャットに秒数を入力（例: 1.5）"));
 
@@ -192,10 +192,10 @@ public final class CreatureDetailGui implements InventoryHolder {
                 Component.text("マーカー画面へ戻る", NamedTextColor.YELLOW), List.of()));
     }
 
-    /** 数値・タグ・秒数などの「チャット入力」項目共通のアイコン。全て本と羽ペン（WRITABLE_BOOK）に統一する。 */
-    private ItemStack valueIcon(String label, @Nullable String currentValueOrNull, String hint) {
+    /** 数値・タグ・秒数などの「チャット入力」項目共通のアイコン。素材は項目の内容に合わせて呼び出し元が指定する。 */
+    private ItemStack valueIcon(Material material, String label, @Nullable String currentValueOrNull, String hint) {
         boolean set = currentValueOrNull != null;
-        return icon(Material.WRITABLE_BOOK, set,
+        return icon(material, set,
                 Component.text(label, set ? NamedTextColor.GREEN : NamedTextColor.WHITE),
                 List.of(
                         gray("現在: " + (set ? currentValueOrNull : "（上書き無し。creatures.yml本来の設定）")),

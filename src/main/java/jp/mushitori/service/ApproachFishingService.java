@@ -186,6 +186,24 @@ public final class ApproachFishingService {
     }
 
     /**
+     * 浮きが「実質的に」水に浮いているかどうか。{@code FishHook#isInWater()}だけで判定すると、
+     * 浮きが波で上下にわずかに揺れる（bob）タイミングによっては、普通に浮かせているだけでも
+     * 瞬間的にfalseを返すことがあり、これをそのまま「水面から離れた」と扱うと、待機・誘導が
+     * 頻繁に誤って打ち切られてしまっていた。{@code isInWater()}がfalseでも、浮きの位置の
+     * すぐ上下1ブロックの範囲に水ブロックがあれば、まだ水面に浮いているとみなす。
+     */
+    private boolean isEffectivelyInWater(FishHook hook) {
+        if (hook.isInWater()) return true;
+        Location loc = hook.getLocation();
+        World world = loc.getWorld();
+        if (world == null) return false;
+        for (double dy = -1.0; dy <= 1.0; dy += 0.5) {
+            if (world.getBlockAt(loc.clone().add(0, dy, 0)).getType() == Material.WATER) return true;
+        }
+        return false;
+    }
+
+    /**
      * 釣竿をキャストしたタイミングで呼ぶ。近くに対象個体がいれば「待機」を開始する。
      *
      * @param rodSizeBonus 竿の大物ボーナス
@@ -199,7 +217,7 @@ public final class ApproachFishingService {
 
         if (plugin.creatures().fishCreatures().isEmpty()) return;
 
-        if (hook.isInWater()) {
+        if (isEffectivelyInWater(hook)) {
             beginWaiting(player, hook, rodSizeBonus, rodEscapeModifier, rodTags);
             return;
         }
@@ -227,7 +245,7 @@ public final class ApproachFishingService {
                 waitingTasks.remove(playerId);
                 return;
             }
-            if (hook.isInWater()) {
+            if (isEffectivelyInWater(hook)) {
                 beginWaiting(player, hook, rodSizeBonus, rodEscapeModifier, rodTags);
                 return;
             }
@@ -272,7 +290,7 @@ public final class ApproachFishingService {
                 waitingTasks.remove(playerId);
                 return;
             }
-            if (!hook.isInWater()) {
+            if (!isEffectivelyInWater(hook)) {
                 log("浮きが水面から離れたため、待機を打ち切ります。");
                 t.cancel();
                 waitingTasks.remove(playerId);
@@ -358,7 +376,7 @@ public final class ApproachFishingService {
                 task.cancel();
                 return;
             }
-            if (!hook.isInWater()) {
+            if (!isEffectivelyInWater(hook)) {
                 log("浮きが水面から離れたため、誘導を打ち切ります。");
                 task.cancel();
                 cancel(player);
